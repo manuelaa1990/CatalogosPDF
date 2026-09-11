@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extractor de Catálogos a CSV (IA)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 20px; color: #333; }
+    .container { max-width: 1000px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    label { font-weight: bold; display: block; margin-bottom: 5px; }
+    input[type="text"], input[type="file"] { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+    button { padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-success { background: #28a745; color: white; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    #status { margin: 15px 0; font-weight: bold; color: #555; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f8f9fa; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Extractor Inteligente de Catálogos</h2>
+  
+  <div class="form-group">
+    <label for="apiKey">API Key de Google Gemini:</label>
+    <input type="text" id="apiKey" placeholder="Pega tu API Key de Gemini aquí">
+  </div>
+
+  <div class="form-group">
+    <label for="fileInput">Seleccionar PDF o Imagen del Catálogo:</label>
+    <input type="file" id="fileInput" accept="application/pdf, image/png, image/jpeg">
+  </div>
+
+  <div class="btn-group">
+    <button class="btn-primary" id="btnProcess" onclick="processFile()">Procesar Documento con IA</button>
+    <button class="btn-success" id="btnDownload" onclick="downloadCSV()" disabled>Descargar CSV</button>
+  </div>
+
+  <div id="status"></div>
+
+  <table id="resultTable" style="display:none;">
+    <thead>
+      <tr>
+        <th>Código Proveedor</th>
+        <th>Descripción</th>
+        <th>Precio</th>
+        <th>Unidad</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+  let extractedData = [];
+
+  async function processFile() {
+    const apiKey = document.getElementById('apiKey').value.trim();
+    const fileInput = document.getElementById('fileInput');
+    const status = document.getElementById('status');
+    const btnProcess = document.getElementById('btnProcess');
+    
+    if (!apiKey) return alert("Ingresa tu API Key de Gemini.");
+    if (!fileInput.files[0]) return alert("Selecciona un archivo PDF o imagen.");
+
+    const file = fileInput.files[0];
+    status.innerText = "Procesando archivo...";
+    btnProcess.disabled = true;
+    extractedData = [];
+
+    try {
+      let imageBase64List = [];
+
+      if (file.type === "application/pdf") {
+        status.innerText = "Convirtiendo páginas del PDF a imágenes...";
+        imageBase64List = await convertPdfToImages(file);
+      } else {
+        const base64 = await fileToBase64(file);
+        imageBase64List.push(base64.split(',')[1]);
+      }
+
+      for (let i = 0; i < imageBase64List.length; i++) {
+        status.innerText = `Analizando página ${i + 1} de ${imageBase64List.length} con IA...`;
+        const pageData = await extractWithGemini(apiKey, imageBase64List[i]);
+        extractedData.push(...pageData);
+      }
+
+      renderTable();
+      status.innerText = `¡Proceso completado! Se extracted ${extractedData.length} productos.`;
+      document.getElementById('btnDownload').disabled = false;
+
+    } catch (err) {
+      console.error(err);
+      status.innerText = "Error procesando el catálogo: " + err.message;
+    } finally {
+      btnProcess.disabled = false;
+    }
+  }
+
+  async function extractWithGemini(apiKey, base64Image) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    
+    const prompt = `Analiza esta imagen de un catálogo comercial de productos/repuestos. 
+Extrae TODOS los artículos listados con sus respectivos códigos de proveedor, descripciones, precios y unidades de medida.
+Devuelve ÚNICAMENTE un arreglo JSON válido en el siguiente formato, sin texto explicativo extra ni marcas de formato markdown:
+[
+  {"codigo_proveedor": "ABC-123", "descripcion": "Filtro secador 3/8", "precio": "12.50", "unidad": "Pza"}
+]`;
+
+    const payload = {
+      contents: [{
+        parts: [
+          { inline_data: { mime_type: "image/png", data: base64Image } },
+          { text: prompt }
+        ]
+      }]
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    let rawText = data.candidates[0].content.parts[0].text;
+    rawText = rawText.replace(/```json|```/g, '').trim();
+    return JSON.parse(rawText);
+  }
+
+  function convertPdfToImages(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async function() {
+        try {
+          const typedarray = new Uint8Array(this.result);
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          const images = [];
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            images.push(canvas.toDataURL('image/png').split(',')[1]);
+          }
+          resolve(images);
+        } catch (e) { reject(e); }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    extractedData.forEach(item => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${item.codigo_proveedor || ''}</td>
+        <td>${item.descripcion || ''}</td>
+        <td>${item.precio || ''}</td>
+        <td>${item.unidad || ''}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('resultTable').style.display = 'table';
+  }
+
+  function downloadCSV() {
+    let csvContent = "\uFEFFcodigo_proveedor,descripcion,precio,unidad\n";
+    extractedData.forEach(row => {
+      let code = `"${(row.codigo_proveedor || '').replace(/"/g, '""')}"`;
+      let desc = `"${(row.descripcion || '').replace(/"/g, '""')}"`;
+      let price = `"${row.precio || ''}"`;
+      let unit = `"${(row.unidad || '').replace(/"/g, '""')}"`;
+      csvContent += `${code},${desc},${price},${unit}\n`;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "catalogo_extraido.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+</script>
+
+</body>
+</html>
