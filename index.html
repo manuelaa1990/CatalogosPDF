@@ -105,8 +105,8 @@
   }
 
   async function extractWithGemini(apiKey, base64Image) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-    
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`;
+        
     const prompt = `Analiza esta imagen de un catálogo comercial de productos/repuestos. 
 Extrae TODOS los artículos listados con sus respectivos códigos de proveedor, descripciones, precios y unidades de medida.
 Devuelve ÚNICAMENTE un arreglo JSON válido en el siguiente formato, sin texto explicativo extra ni marcas de formato markdown:
