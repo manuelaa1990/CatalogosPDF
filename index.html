@@ -86,7 +86,7 @@
       color:#fff !important;
     }
 
-    /* CAMBIO 1: Botón "avanzar" deshabilitado en el presente */
+    /* Botón "avanzar" deshabilitado en el presente */
     #btn-next:disabled {
       opacity: 0.3;
       cursor: not-allowed;
@@ -148,7 +148,7 @@
     ⚠️ <strong>¡ALERTA DE BATERÍA BAJA!</strong> <span id="bat-alert-msg">Nivel por debajo del 20%. Cargue el dispositivo pronto.</span>
   </div>
 
-  <!-- CAMBIO 2: BANNER DE DATOS OBSOLETOS -->
+  <!-- BANNER DE DATOS OBSOLETOS -->
   <div id="stale-banner" class="hidden bg-amber-600/20 border border-amber-500/50 p-2 rounded-xl text-center text-amber-300 text-xs">
     ⏸ <strong>Datos congelados.</strong> El ESP32 no envía lecturas desde hace más de 35 s. Las alarmas están en pausa hasta recibir datos nuevos.
   </div>
@@ -245,7 +245,7 @@
         <span>Presión / Prueba de Hermeticidad</span>
         <button onclick="togglePressureMode(false)" title="Ocultar" class="text-slate-500 hover:text-emerald-400 p-0.5">×</button>
       </div>
-      <span class="text-[8px] text-slate-500 normal-case">60/40</span>
+      <span id="ph-model-label" class="text-[8px] text-slate-500 normal-case">60/40</span>
     </div>
 
     <div class="grid grid-cols-[1fr_auto] gap-2 items-end mt-1.5">
@@ -262,11 +262,35 @@
 
     <input type="datetime-local" id="n2-time-init" class="hidden">
 
-    <div class="text-[8px] text-slate-500 mt-1">
-      N₂: 60% exterior (S1) + 40% interior (S2)
+    <!-- BALANCE EVAP/COND (reparto configurable) -->
+    <div class="mt-2 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2 text-left">
+      <div class="flex justify-between items-center mb-1.5">
+        <label class="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Balance Evap/Cond</label>
+        <span class="text-[8px] text-slate-500">Suma 100 %</span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] font-bold text-sky-400 w-10">Evap</span>
+        <input type="range" id="ph-s1-weight-range" min="0" max="100" step="5" value="60"
+          oninput="setPHWeight(this.value)"
+          class="flex-1 accent-sky-500 h-1.5">
+        <input type="number" id="ph-s1-weight-num" min="0" max="100" step="5" value="60"
+          oninput="setPHWeight(this.value)"
+          class="w-14 bg-slate-900 border border-slate-700 text-sky-400 text-center rounded py-0.5 text-[11px] font-bold focus:outline-none">
+        <span class="text-[10px] text-slate-400">%</span>
+      </div>
+
+      <div class="flex items-center gap-2 mt-1.5">
+        <span class="text-[10px] font-bold text-rose-400 w-10">Cond</span>
+        <div class="flex-1 bg-slate-800 rounded h-1.5 overflow-hidden">
+          <div id="ph-s2-bar" class="bg-rose-500 h-full transition-all duration-300" style="width:40%"></div>
+        </div>
+        <span id="ph-s2-val" class="text-[11px] font-bold text-rose-400 w-14 text-center">40 %</span>
+        <span class="text-[10px] text-slate-400 invisible">%</span>
+      </div>
     </div>
 
-    <div class="border-t border-slate-700/60 mt-1.5 pt-1.5">
+    <div class="border-t border-slate-700/60 mt-2 pt-1.5">
       <div class="grid grid-cols-2 gap-2">
         <div class="rounded-lg bg-slate-900/50 border border-slate-700/50 py-1">
           <div class="text-[8px] text-slate-500 uppercase">Presión esperada</div>
@@ -491,14 +515,12 @@
     return String(str).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  /* Registra la lectura más reciente conocida (nunca retrocede) */
   function noteReading(createdAt) {
     const d = new Date(createdAt);
     if (isNaN(d.getTime())) return;
     if (!lastSeenAt || d > lastSeenAt) lastSeenAt = d;
   }
 
-  // CAMBIO 4: ¿La lectura más reciente es suficientemente fresca para confiar en ella?
   function isDataFresh(createdAt) {
     if (!createdAt) return false;
     const t = new Date(createdAt).getTime();
@@ -810,7 +832,6 @@
     fetchData();
   }
 
-  // CAMBIO 6: updateRangeUI() ahora delega el botón › en updateNextButtonState()
   function updateRangeUI() {
     [2, 4, 8, 12, 24].forEach(h => {
       const btn = document.getElementById(`btn-range-${h}`);
@@ -830,7 +851,6 @@
     updateTimeWindowLabel();
   }
 
-  // CAMBIO 5: Habilita/deshabilita el botón › según si ya estamos en el presente
   function updateNextButtonState() {
     const btn = document.getElementById("btn-next");
     if (!btn) return;
@@ -988,10 +1008,47 @@
     return { ...row, s1, s2, delta, bateria, bateriaVolt: vBat, wifi };
   }
 
-  /* PRUEBA DE HERMETICIDAD */
+  /* PRUEBA DE HERMETICIDAD — BALANCE EVAP/COND CONFIGURABLE */
   const ATM_PSI = 14.696;
-  const PH_S1_WEIGHT = 0.60;
-  const PH_S2_WEIGHT = 0.40;
+
+  // Pesos configurables por el usuario (en porcentaje, 0-100). Por defecto 60/40.
+  let phS1Weight = parseInt(localStorage.getItem("ph-s1-weight"));
+  if (!Number.isFinite(phS1Weight) || phS1Weight < 0 || phS1Weight > 100) phS1Weight = 60;
+  let phS2Weight = 100 - phS1Weight;
+
+  function setPHWeight(value) {
+    let v = parseInt(value);
+    if (!Number.isFinite(v)) v = 60;
+    v = Math.max(0, Math.min(100, v));
+
+    phS1Weight = v;
+    phS2Weight = 100 - v;
+
+    localStorage.setItem("ph-s1-weight", v);
+
+    const rangeEl = document.getElementById("ph-s1-weight-range");
+    const numEl = document.getElementById("ph-s1-weight-num");
+    const s2Bar = document.getElementById("ph-s2-bar");
+    const s2Val = document.getElementById("ph-s2-val");
+    const modelLabel = document.getElementById("ph-model-label");
+
+    if (rangeEl && Number(rangeEl.value) !== v) rangeEl.value = v;
+    if (numEl && Number(numEl.value) !== v) numEl.value = v;
+    if (s2Bar) s2Bar.style.width = `${phS2Weight}%`;
+    if (s2Val) s2Val.textContent = `${phS2Weight} %`;
+    if (modelLabel) modelLabel.textContent = `${phS1Weight}/${phS2Weight}`;
+
+    // Aviso si hay una referencia tomada con un modelo distinto
+    if (pressureReference && pressureReference.model !== `${phS1Weight}/${phS2Weight}`) {
+      const msg = document.getElementById("n2-status-msg");
+      if (msg) {
+        msg.textContent = `⚠ Referencia tomada con balance ${pressureReference.model}. Cambiar a ${phS1Weight}/${phS2Weight} alterará la presión esperada.`;
+        msg.className = "text-[8px] text-amber-400 font-bold mt-0.5";
+      }
+    }
+
+    renderData();
+  }
 
   let pressureReference = null;
   let pressureLastMeasured = null;
@@ -1002,7 +1059,7 @@
     const s1 = Number(s1C);
     const s2 = Number(s2C);
     if (!Number.isFinite(s1) || !Number.isFinite(s2)) return null;
-    return (PH_S1_WEIGHT * s1) + (PH_S2_WEIGHT * s2);
+    return (phS1Weight / 100) * s1 + (phS2Weight / 100) * s2;
   }
 
   function togglePressureMode(showState) {
@@ -1053,6 +1110,10 @@
 
     const checkbox = document.getElementById("chk-pressure");
     if (checkbox) checkbox.checked = pressureTestVisible;
+
+    // Restaurar el balance Evap/Cond configurado (por defecto 60/40)
+    const savedWeight = parseInt(localStorage.getItem("ph-s1-weight"));
+    setPHWeight(Number.isFinite(savedWeight) && savedWeight >= 0 && savedWeight <= 100 ? savedWeight : 60);
   }
 
   function getLatestTemperatureRecord() {
@@ -1099,7 +1160,7 @@
         tempS1C: Number(record.s1),
         tempS2C: Number(record.s2),
         tempRefC: Number(tEff),
-        model: "60/40"
+        model: `${phS1Weight}/${phS2Weight}`
       };
 
       pressureLastMeasured = { timestamp, pressureGauge, tempC: Number(tEff) };
@@ -1117,7 +1178,6 @@
   }
 
   /* NAVEGACIÓN Y OBTENCIÓN DE DATOS */
-  // CAMBIO 7: navigateWindow() actualiza el estado del botón ›
   function navigateWindow(direction) {
     isLive = false;
     updateConnectionBadge();
@@ -1127,7 +1187,6 @@
     fetchData();
   }
 
-  // CAMBIO 8: goLive() actualiza el estado del botón ›
   function goLive() {
     isLive = true;
     updateConnectionBadge();
@@ -1264,7 +1323,6 @@
         document.getElementById("wifi-val").textContent = `Wifi: "${latest.wifi}"`;
       }
 
-      // CAMBIO 9: Verificación de alarmas (solo si los datos son frescos) + banner de datos obsoletos
       const dataIsFresh = isDataFresh(latest.created_at);
 
       if (dataIsFresh) {
@@ -1329,7 +1387,6 @@
     loadSavedAlarms();
     loadPressureState();
     setWorkMode(workMode);
-    // CAMBIO 10: Inicializar estado del botón ›
     updateNextButtonState();
     updateConnectionBadge();
     fetchData();
@@ -1374,7 +1431,7 @@
   });
 </script>
 
-<!-- CAMBIO 3: Registro del Service Worker (PWA) -->
+<!-- Registro del Service Worker (PWA) -->
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
