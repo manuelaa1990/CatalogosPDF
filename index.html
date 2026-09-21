@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
   <title>Termometro DataBase</title>
 
@@ -16,6 +16,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -91,6 +92,47 @@
       opacity: 0.3;
       cursor: not-allowed;
     }
+
+    /* Contenedor de la gráfica: permitir gestos táctiles del plugin de zoom */
+    #chart-wrapper {
+      touch-action: none;
+      position: relative;
+    }
+
+    /* Leyenda de la gráfica (Chart.js la coloca donde le indicamos) */
+    #chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1rem;
+      justify-content: center;
+      align-items: center;
+      padding: 0.25rem 0.5rem;
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    #chart-legend .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      user-select: none;
+      opacity: 1;
+      transition: opacity 0.15s;
+    }
+    #chart-legend .legend-item.hidden-dataset {
+      opacity: 0.35;
+      text-decoration: line-through;
+    }
+    #chart-legend .legend-swatch {
+      display: inline-block;
+      width: 14px;
+      height: 3px;
+      border-radius: 2px;
+    }
+    body.epaper-mode #chart-legend,
+    body.epaper-mode #chart-legend .legend-item {
+      color: #000 !important;
+    }
   </style>
 </head>
 
@@ -99,25 +141,26 @@
 <div class="max-w-md md:max-w-3xl mx-auto space-y-3">
 
   <!-- BARRA SUPERIOR -->
-  <div class="flex flex-wrap justify-between items-center bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-xl text-xs gap-2">
+  <div class="flex flex-wrap justify-between items-center bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-xl text-xs gap-2 transition-opacity duration-300">
     <div class="flex items-center gap-3 text-slate-400">
       <!-- BATERÍA -->
       <div class="flex items-center gap-1.5">
         <svg id="bat-icon" class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
         </svg>
-        <span id="bat-val" title="Batería 18650" class="font-medium text-slate-300 text-[11px]">--% · --.--V</span>
+        <span id="bat-val" title="Batería 18650 (estado actual del ESP32)" class="font-medium text-slate-300 text-[11px]">--% · --.--V</span>
         <div class="w-8 bg-slate-700 h-1.5 rounded-full overflow-hidden">
           <div id="bat-bar" class="bg-emerald-500 h-full transition-all duration-500" style="width:0%"></div>
         </div>
       </div>
 
-      <!-- WIFI -->
+      <!-- WIFI + IP -->
       <div class="flex items-center gap-1 text-[11px] text-slate-300 border-l border-slate-700 pl-2.5">
         <svg class="w-3.5 h-3.5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071a10 10 0 0114.142 0M1.42 9.428a16 16 0 0121.16 0"/>
         </svg>
         <span id="wifi-val">Wifi: "Sin conexión"</span>
+        <span id="ip-val" class="text-sky-300 font-mono text-[10px] ml-1" title="IP local del dispositivo">--</span>
       </div>
     </div>
 
@@ -347,36 +390,67 @@
     </div>
   </div>
 
-  <!-- SELECTORES GRÁFICA -->
-  <div class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2.5">
-    <div class="flex justify-around items-center bg-slate-900/70 border border-slate-700/50 py-1.5 px-2 rounded-lg text-xs">
-      <label class="flex items-center gap-1.5 cursor-pointer">
-        <input type="checkbox" id="chk-s1" checked onchange="updateChartVisibility()">
-        <span class="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block"></span>
-        <span class="text-[11px]">Sonda 1</span>
-      </label>
+  <!-- GRÁFICA -->
+  <div class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2">
+    <!-- Barra de herramientas: filtros + acciones -->
+    <div class="flex justify-between items-center flex-wrap gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="chk-s1" checked onchange="updateChartVisibility()">
+          <span class="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block"></span>
+          <span class="text-[10px] text-slate-300">S1</span>
+        </label>
 
-      <label class="flex items-center gap-1.5 cursor-pointer">
-        <input type="checkbox" id="chk-s2" checked onchange="updateChartVisibility()">
-        <span class="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block"></span>
-        <span class="text-[11px]">Sonda 2</span>
-      </label>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="chk-s2" checked onchange="updateChartVisibility()">
+          <span class="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block"></span>
+          <span class="text-[10px] text-slate-300">S2</span>
+        </label>
 
-      <label class="flex items-center gap-1.5 cursor-pointer">
-        <input type="checkbox" id="chk-delta" checked onchange="toggleDeltaT(this.checked)">
-        <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
-        <span class="text-[11px]">ΔT</span>
-      </label>
-      <label id="pressure-chart-selector" class="flex items-center gap-1.5 cursor-pointer">
-        <input type="checkbox" id="chk-pressure" checked onchange="togglePressureMode(this.checked)">
-        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
-        <span class="text-[11px]">P.H.</span>
-      </label>
+        <label class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="chk-delta" checked onchange="toggleDeltaT(this.checked)">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>
+          <span class="text-[10px] text-slate-300">ΔT</span>
+        </label>
+
+        <label id="pressure-chart-selector" class="flex items-center gap-1.5 cursor-pointer">
+          <input type="checkbox" id="chk-pressure" checked onchange="togglePressureMode(this.checked)">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
+          <span class="text-[10px] text-slate-300">P.H.</span>
+        </label>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <!-- Reset zoom -->
+        <button onclick="resetChartZoom()" title="Restablecer zoom"
+          class="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition active:scale-95">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+        </button>
+
+        <!-- Descargar PNG -->
+        <button onclick="downloadChartPNG()" title="Descargar imagen en alta resolución"
+          class="px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          PNG
+        </button>
+      </div>
     </div>
 
-    <!-- GRÁFICA -->
-    <div class="relative h-64 md:h-80">
+    <!-- Leyenda (controlada por nosotros, no por Chart.js) -->
+    <div id="chart-legend"></div>
+
+    <!-- Contenedor de la gráfica (touch-action:none para el zoom) -->
+    <div id="chart-wrapper" class="relative h-64 md:h-80">
       <canvas id="tempChart"></canvas>
+    </div>
+
+    <!-- Hint de gestos -->
+    <div class="text-center text-[9px] text-slate-500">
+      Pellizca para zoom · Arrastra para desplazar · Doble toque para reset
     </div>
   </div>
 
@@ -416,6 +490,9 @@
   let isFetching = false;
   let alarmActive = false;
 
+  /* ESTADO DEL SISTEMA (independiente de la ventana visible) */
+  let latestAbsolute = null;
+
   /* ESTADO DE CONEXIÓN (ESP32 / SUPABASE) */
   const ESP_CONNECTED_MAX_AGE_MS = 35000;
   const POLL_INTERVAL_MS = 10000;
@@ -443,18 +520,55 @@
     }
   }, 10000);
 
-  /* GRÁFICA INICIALIZACIÓN */
+  /* ============================================================
+     GRÁFICA INICIALIZACIÓN
+     ============================================================ */
+
+  const DATASET_META = [
+    { label: "SONDA 1",      color: "#38bdf8", visible: true },
+    { label: "SONDA 2",      color: "#f87171", visible: true },
+    { label: "ΔT",           color: "#fbbf24", visible: true },
+    { label: "P.H. Esperada",color: "#34d399", visible: true },
+    { label: "P.H. Medida",  color: "#a7f3d0", visible: true }
+  ];
+
   const ctx = document.getElementById("tempChart").getContext("2d");
   const tempChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: [],
       datasets: [
-        { label: "SONDA 1", borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,.05)", data: [], borderWidth: 2, tension: .2, pointRadius: 1, fill: true },
-        { label: "SONDA 2", borderColor: "#f87171", backgroundColor: "rgba(248,113,113,.05)", data: [], borderWidth: 2, tension: .2, pointRadius: 1, fill: true },
-        { label: "ΔT", borderColor: "#fbbf24", backgroundColor: "rgba(251,191,36,.05)", data: [], borderWidth: 2, tension: .2, pointRadius: 1, fill: true },
-        { label: "P.H. Esperada", borderColor: "#34d399", backgroundColor: "rgba(52,211,153,.03)", data: [], borderWidth: 2, tension: .15, pointRadius: 1, fill: false, yAxisID: "pressure" },
-        { label: "P.H. Medida", borderColor: "#a7f3d0", backgroundColor: "rgba(167,243,208,.0)", data: [], borderWidth: 0, tension: 0, pointRadius: 4, pointHoverRadius: 5, showLine: false, fill: false, yAxisID: "pressure" }
+        {
+          label: "SONDA 1",
+          borderColor: "#38bdf8",
+          backgroundColor: "rgba(56,189,248,.06)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "SONDA 2",
+          borderColor: "#f87171",
+          backgroundColor: "rgba(248,113,113,.06)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "ΔT",
+          borderColor: "#fbbf24",
+          backgroundColor: "rgba(251,191,36,.06)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "P.H. Esperada",
+          borderColor: "#34d399",
+          backgroundColor: "rgba(52,211,153,.04)",
+          data: [], borderWidth: 2.5, tension: .15, pointRadius: 1.5, pointHoverRadius: 5, fill: false, yAxisID: "pressure"
+        },
+        {
+          label: "P.H. Medida",
+          borderColor: "#a7f3d0",
+          backgroundColor: "rgba(167,243,208,.0)",
+          data: [], borderWidth: 0, tension: 0, pointRadius: 5, pointHoverRadius: 6,
+          showLine: false, fill: false, yAxisID: "pressure"
+        }
       ]
     },
     options: {
@@ -463,8 +577,15 @@
       animation: false,
       interaction: { mode: "index", intersect: false },
       scales: {
-        x: { ticks: { color: "#94a3b8", font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: "#334155" } },
-        y: { grace: "5%", ticks: { color: "#94a3b8", font: { size: 10 } }, grid: { color: "#334155" } },
+        x: {
+          ticks: { color: "#94a3b8", font: { size: 10 }, maxTicksLimit: 8 },
+          grid: { color: "#1e293b" }
+        },
+        y: {
+          grace: "5%",
+          ticks: { color: "#94a3b8", font: { size: 10 } },
+          grid: { color: "#1e293b" }
+        },
         pressure: {
           position: "right",
           display: true,
@@ -474,20 +595,133 @@
         }
       },
       plugins: {
-        legend: { display: false },
+        legend: { display: false },  // usamos nuestra propia leyenda HTML
         tooltip: {
+          backgroundColor: "rgba(15,23,42,0.95)",
+          borderColor: "#334155",
+          borderWidth: 1,
+          titleColor: "#e2e8f0",
+          bodyColor: "#cbd5e1",
+          padding: 8,
           callbacks: {
             label: function(context) {
               const value = context.parsed.y;
               if (value === null || value === undefined) return context.dataset.label + ": DESC";
               const unit = context.dataset.label.startsWith("P.H.") ? " PSI" : " °C";
-              return context.dataset.label + ": " + value.toFixed(1) + unit;
+              return context.dataset.label + ": " + value.toFixed(2) + unit;
             }
+          }
+        },
+        /* ================= ZOOM / PAN TÁCTIL ================= */
+        zoom: {
+          limits: {
+            x: { min: "original", max: "original" },
+            y: { min: "original", max: "original" }
+          },
+          pan: {
+            enabled: true,
+            mode: "x",
+            modifierKey: null,
+            threshold: 5
+          },
+          zoom: {
+            wheel: { enabled: true, speed: 0.05 },
+            pinch: { enabled: true },
+            drag: { enabled: false }, // el drag es para pan, no para zoom
+            mode: "x"
           }
         }
       }
     }
   });
+
+  /* ============================================================
+     LEYENDA PERSONALIZADA (clicables)
+     ============================================================ */
+
+  function buildChartLegend() {
+    const legendEl = document.getElementById("chart-legend");
+    if (!legendEl) return;
+
+    legendEl.innerHTML = DATASET_META.map((meta, i) => `
+      <div class="legend-item ${tempChart.isDatasetVisible(i) ? "" : "hidden-dataset"}" data-idx="${i}">
+        <span class="legend-swatch" style="background:${meta.color}"></span>
+        <span>${meta.label}</span>
+      </div>
+    `).join("");
+
+    legendEl.querySelectorAll(".legend-item").forEach(item => {
+      item.addEventListener("click", () => {
+        const idx = parseInt(item.dataset.idx);
+        // Sincronizar con los checkboxes de la barra superior
+        const idMap = ["chk-s1", "chk-s2", "chk-delta", "chk-pressure", "chk-pressure"];
+        const chk = document.getElementById(idMap[idx]);
+        if (chk) {
+          chk.checked = !tempChart.isDatasetVisible(idx);
+          if (idx === 2) toggleDeltaT(chk.checked);
+          else if (idx === 3 || idx === 4) togglePressureMode(chk.checked);
+          else updateChartVisibility();
+        }
+      });
+    });
+  }
+
+  function refreshLegendState() {
+    const legendEl = document.getElementById("chart-legend");
+    if (!legendEl) return;
+    legendEl.querySelectorAll(".legend-item").forEach(item => {
+      const idx = parseInt(item.dataset.idx);
+      item.classList.toggle("hidden-dataset", !tempChart.isDatasetVisible(idx));
+    });
+  }
+
+  /* ============================================================
+     ZOOM / RESET / DESCARGA PNG
+     ============================================================ */
+
+  function resetChartZoom() {
+    if (tempChart.resetZoom) tempChart.resetZoom();
+    if ("vibrate" in navigator) navigator.vibrate(15);
+  }
+
+  function downloadChartPNG() {
+    // Guardar estado actual del canvas para restaurarlo después
+    const originalWidth = tempChart.width;
+    const originalHeight = tempChart.height;
+    const originalDPR = window.devicePixelRatio || 1;
+
+    // Exportar como PNG de alta resolución (2× la resolución del canvas actual)
+    const hiResWidth  = Math.max(1600, originalWidth * 2);
+    const hiResHeight = Math.max(900,  originalHeight * 2);
+
+    // Chart.js admite resize temporal; tras el export restauramos
+    tempChart.resize(hiResWidth, hiResHeight);
+
+    // Forzar un repintado limpio
+    setTimeout(() => {
+      const dataURL = tempChart.toBase64Image("image/png", 1);
+
+      // Restaurar tamaño original
+      tempChart.resize(originalWidth, originalHeight);
+
+      // Descargar
+      const now = new Date();
+      const stamp = now.getFullYear() + "-" +
+        String(now.getMonth()+1).padStart(2,"0") + "-" +
+        String(now.getDate()).padStart(2,"0") + "_" +
+        String(now.getHours()).padStart(2,"0") + "-" +
+        String(now.getMinutes()).padStart(2,"0");
+
+      const a = document.createElement("a");
+      a.href = dataURL;
+      a.download = `termometro_${stamp}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      if ("vibrate" in navigator) navigator.vibrate([20, 40, 20]);
+    }, 120);
+  }
 
   /* ============================================================
      ESTADO DE CONEXIÓN: Conectado / Desconectado / Historial
@@ -560,6 +794,13 @@
     badge.textContent = text;
     badge.className = BADGE_BASE + BADGE_STYLES[style];
     badge.title = tip;
+
+    // Atenuar la barra superior en modo historial
+    const topBar = badge.closest(".bg-slate-800\\/60") || badge.parentElement?.parentElement;
+    if (topBar) {
+      topBar.style.opacity = isLive ? "1" : "0.75";
+      topBar.title = isLive ? "" : "Estado actual del sistema (no del historial visible)";
+    }
   }
 
   function updateDiagDot() {
@@ -584,16 +825,27 @@
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
+  /* ============================================================
+     POLL: última lectura ABSOLUTA (para barra superior)
+     ============================================================ */
+
   async function pollLatest() {
     if (isPolling || document.hidden) return;
     isPolling = true;
     try {
       const { data, error } = await withTimeout(
-        supabaseClient.from(TABLE_NAME).select("created_at").order("created_at", { ascending: false }).limit(1),
+        supabaseClient.from(TABLE_NAME)
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(1),
         8000
       );
       if (error) throw error;
-      if (data && data.length) noteReading(data[0].created_at);
+      if (data && data.length) {
+        noteReading(data[0].created_at);
+        latestAbsolute = processRow(data[0]);
+        renderBatteryAndWifi();   // ← barra superior siempre actualizada
+      }
       setDbState(true);
     } catch (err) {
       setDbState(false, err);
@@ -764,6 +1016,7 @@
           const age = Date.now() - new Date(row.created_at).getTime();
           const extra = [
             row.wifi ? `red "${row.wifi}"` : null,
+            row.ip_local ? `IP ${row.ip_local}` : null,
             row.rssi != null ? `RSSI ${row.rssi} dBm` : null,
             row.bateriaVolt != null ? `batería ${Number(row.bateriaVolt).toFixed(2)} V` : null
           ].filter(Boolean).join(" · ");
@@ -917,11 +1170,11 @@
       btnText.textContent = "ePaper";
       btnEPaper.className = "px-2 py-0.5 text-[10px] font-bold rounded border border-slate-600 bg-slate-800 text-slate-300 hover:text-white transition flex items-center gap-1";
       tempChart.options.scales.x.ticks.color = "#94a3b8";
-      tempChart.options.scales.x.grid.color = "#334155";
+      tempChart.options.scales.x.grid.color = "#1e293b";
       tempChart.options.scales.y.ticks.color = "#94a3b8";
-      tempChart.options.scales.y.grid.color = "#334155";
+      tempChart.options.scales.y.grid.color = "#1e293b";
       tempChart.options.scales.pressure.ticks.color = "#34d399";
-      tempChart.options.scales.pressure.grid.color = "#334155";
+      tempChart.options.scales.pressure.grid.color = "#1e293b";
     }
     tempChart.update();
     renderData();
@@ -950,6 +1203,7 @@
     tempChart.setDatasetVisibility(3, pressure);
     tempChart.setDatasetVisibility(4, pressure);
     tempChart.update();
+    refreshLegendState();
   }
 
   function loadSavedAlarms() {
@@ -1004,14 +1258,67 @@
     }
 
     const wifi = row.wifi || row.ssid || null;
+    const ip   = row.ip_local || row.ip || null;
 
-    return { ...row, s1, s2, delta, bateria, bateriaVolt: vBat, wifi };
+    return { ...row, s1, s2, delta, bateria, bateriaVolt: vBat, wifi, ip };
+  }
+
+  /* ============================================================
+     BARRA SUPERIOR: BATERÍA Y WIFI (estado ABSOLUTO del sistema)
+     Se llama desde pollLatest() y desde Realtime, NO desde renderData()
+     ============================================================ */
+
+  function renderBatteryAndWifi() {
+    if (!latestAbsolute) return;
+
+    // BATERÍA
+    if (latestAbsolute.bateriaVolt !== null) {
+      const v = latestAbsolute.bateriaVolt;
+      const pct = latestAbsolute.bateria;
+      document.getElementById("bat-val").textContent = `${pct}% · ${v.toFixed(2)}V`;
+
+      const batBar = document.getElementById("bat-bar");
+      const batIcon = document.getElementById("bat-icon");
+      const batBanner = document.getElementById("bat-alert-banner");
+      const batMsg = document.getElementById("bat-alert-msg");
+
+      batBar.style.width = `${pct}%`;
+
+      if (pct <= 20 || v <= 3.10) {
+        batBar.className = "bg-rose-500 h-full transition-all duration-500";
+        batIcon.className = "w-3.5 h-3.5 text-rose-500";
+        batBanner.classList.remove("hidden");
+
+        if (v <= 3.10) {
+          batMsg.textContent = `Batería en nivel crítico (${v.toFixed(2)}V). El dispositivo entrará en modo de corte/protección.`;
+        } else {
+          batMsg.textContent = `Nivel por debajo del 20% (${v.toFixed(2)}V). Cargue el dispositivo pronto.`;
+        }
+      } else if (pct <= 50) {
+        batBar.className = "bg-amber-500 h-full transition-all duration-500";
+        batIcon.className = "w-3.5 h-3.5 text-amber-400";
+        batBanner.classList.add("hidden");
+      } else {
+        batBar.className = "bg-emerald-500 h-full transition-all duration-500";
+        batIcon.className = "w-3.5 h-3.5 text-emerald-400";
+        batBanner.classList.add("hidden");
+      }
+    }
+
+    // WIFI + IP
+    if (latestAbsolute.wifi) {
+      document.getElementById("wifi-val").textContent = `Wifi: "${latestAbsolute.wifi}"`;
+    }
+    if (latestAbsolute.ip) {
+      document.getElementById("ip-val").textContent = `IP: ${latestAbsolute.ip}`;
+    } else {
+      document.getElementById("ip-val").textContent = `IP: --`;
+    }
   }
 
   /* PRUEBA DE HERMETICIDAD — BALANCE EVAP/COND CONFIGURABLE */
   const ATM_PSI = 14.696;
 
-  // Pesos configurables por el usuario (en porcentaje, 0-100). Por defecto 60/40.
   let phS1Weight = parseInt(localStorage.getItem("ph-s1-weight"));
   if (!Number.isFinite(phS1Weight) || phS1Weight < 0 || phS1Weight > 100) phS1Weight = 60;
   let phS2Weight = 100 - phS1Weight;
@@ -1038,7 +1345,6 @@
     if (s2Val) s2Val.textContent = `${phS2Weight} %`;
     if (modelLabel) modelLabel.textContent = `${phS1Weight}/${phS2Weight}`;
 
-    // Aviso si hay una referencia tomada con un modelo distinto
     if (pressureReference && pressureReference.model !== `${phS1Weight}/${phS2Weight}`) {
       const msg = document.getElementById("n2-status-msg");
       if (msg) {
@@ -1111,7 +1417,6 @@
     const checkbox = document.getElementById("chk-pressure");
     if (checkbox) checkbox.checked = pressureTestVisible;
 
-    // Restaurar el balance Evap/Cond configurado (por defecto 60/40)
     const savedWeight = parseInt(localStorage.getItem("ph-s1-weight"));
     setPHWeight(Number.isFinite(savedWeight) && savedWeight >= 0 && savedWeight <= 100 ? savedWeight : 60);
   }
@@ -1227,7 +1532,7 @@
     }
   }
 
-  /* RENDERIZADO DE INTERFAZ Y BATERÍA CON ALERTAS */
+  /* RENDERIZADO DE INTERFAZ (tarjetas del dominio visible) */
   function renderData() {
     updateTimeWindowLabel();
 
@@ -1287,41 +1592,7 @@
       document.getElementById("temp1-time").textContent = `Última: ${lastTime}`;
       document.getElementById("temp2-time").textContent = `Última: ${lastTime}`;
 
-      if (latest.bateriaVolt !== null) {
-        const v = latest.bateriaVolt;
-        const pct = latest.bateria;
-        document.getElementById("bat-val").textContent = `${pct}% · ${v.toFixed(2)}V`;
-        const batBar = document.getElementById("bat-bar");
-        const batIcon = document.getElementById("bat-icon");
-        const batBanner = document.getElementById("bat-alert-banner");
-        const batMsg = document.getElementById("bat-alert-msg");
-
-        batBar.style.width = `${pct}%`;
-
-        if (pct <= 20 || v <= 3.10) {
-          batBar.className = "bg-rose-500 h-full transition-all duration-500";
-          batIcon.className = "w-3.5 h-3.5 text-rose-500";
-          batBanner.classList.remove("hidden");
-
-          if (v <= 3.10) {
-            batMsg.textContent = `Batería en nivel crítico (${v.toFixed(2)}V). El dispositivo entrará en modo de corte/protección.`;
-          } else {
-            batMsg.textContent = `Nivel por debajo del 20% (${v.toFixed(2)}V). Cargue el dispositivo pronto.`;
-          }
-        } else if (pct <= 50) {
-          batBar.className = "bg-amber-500 h-full transition-all duration-500";
-          batIcon.className = "w-3.5 h-3.5 text-amber-400";
-          batBanner.classList.add("hidden");
-        } else {
-          batBar.className = "bg-emerald-500 h-full transition-all duration-500";
-          batIcon.className = "w-3.5 h-3.5 text-emerald-400";
-          batBanner.classList.add("hidden");
-        }
-      }
-
-      if (latest.wifi) {
-        document.getElementById("wifi-val").textContent = `Wifi: "${latest.wifi}"`;
-      }
+      // ⚠️ Batería y WiFi YA NO se actualizan aquí. Se actualizan desde pollLatest().
 
       const dataIsFresh = isDataFresh(latest.created_at);
 
@@ -1379,7 +1650,10 @@
     tempChart.data.datasets[2].data = deltaData;
     tempChart.data.datasets[3].data = pressureExpData;
     tempChart.data.datasets[4].data = pressureMeasData;
-    tempChart.update();
+
+    // Preservar zoom al actualizar (no resetear)
+    tempChart.update("none");
+    refreshLegendState();
   }
 
   /* INICIALIZACIÓN DE LA APLICACIÓN */
@@ -1389,8 +1663,10 @@
     setWorkMode(workMode);
     updateNextButtonState();
     updateConnectionBadge();
+    buildChartLegend();
     fetchData();
     pollLatest();
+    renderBatteryAndWifi();
 
     supabaseClient
       .channel("public:" + TABLE_NAME)
@@ -1398,6 +1674,11 @@
         realtimeEvents++;
         if (payload.new && payload.new.created_at) noteReading(payload.new.created_at);
 
+        // Actualizar estado del sistema (barra superior) SIEMPRE
+        latestAbsolute = processRow(payload.new);
+        renderBatteryAndWifi();
+
+        // Actualizar ventana visible solo si estamos en vivo
         if (isLive) {
           rawData.push(payload.new);
           windowEndTime = new Date();
