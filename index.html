@@ -17,6 +17,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -87,16 +88,19 @@
       color:#fff !important;
     }
 
+    /* Botón "avanzar" deshabilitado en el presente */
     #btn-next:disabled {
       opacity: 0.3;
       cursor: not-allowed;
     }
 
+    /* Contenedor de la gráfica: permitir gestos táctiles del plugin de zoom */
     #chart-wrapper {
       touch-action: none;
       position: relative;
     }
 
+    /* Leyenda de la gráfica (Chart.js la coloca donde le indicamos) */
     #chart-legend {
       display: flex;
       flex-wrap: wrap;
@@ -130,12 +134,18 @@
     body.epaper-mode #chart-legend .legend-item {
       color: #000 !important;
     }
+
+    /* Feedback al pulsar botones de descarga */
+    .download-btn:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
   </style>
 </head>
 
 <body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6" onclick="enableVibrationOnTouch()">
 
-<div class="max-w-md md:max-w-3xl mx-auto space-y-3">
+<div id="app-wrapper" class="max-w-md md:max-w-3xl mx-auto space-y-3">
 
   <!-- BARRA SUPERIOR -->
   <div class="flex flex-wrap justify-between items-center bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-xl text-xs gap-2 transition-opacity duration-300">
@@ -176,7 +186,7 @@
         <span>DB</span>
       </button>
 
-      <!-- ESTADO -->
+      <!-- ESTADO: Conectado / Desconectado / Historial -->
       <div id="status-badge" onclick="openDiagnostics()" title="Toque para diagnosticar" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 cursor-pointer">
         Verificando...
       </div>
@@ -302,7 +312,7 @@
 
     <input type="datetime-local" id="n2-time-init" class="hidden">
 
-    <!-- BALANCE EVAP/COND -->
+    <!-- BALANCE EVAP/COND (reparto configurable) -->
     <div class="mt-2 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2 text-left">
       <div class="flex justify-between items-center mb-1.5">
         <label class="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Balance Evap/Cond</label>
@@ -362,6 +372,7 @@
 
   <!-- CONTROLES DE NAVEGACIÓN Y RANGO DE TIEMPO -->
   <div class="bg-slate-800 border border-slate-700/60 p-2 rounded-xl shadow-md space-y-2">
+    <!-- SELECTOR DE HORAS -->
     <div class="grid grid-cols-5 gap-1 bg-slate-900/70 p-1 rounded-lg text-[10px] font-bold text-center">
       <button id="btn-range-2" onclick="setTimeRange(2)" class="py-1 rounded-md transition">2h</button>
       <button id="btn-range-4" onclick="setTimeRange(4)" class="py-1 rounded-md transition">4h</button>
@@ -370,11 +381,13 @@
       <button id="btn-range-24" onclick="setTimeRange(24)" class="py-1 rounded-md transition">24h</button>
     </div>
 
+    <!-- INDICADOR VISUAL DEL RANGO DE FECHA/HORA ACTUAL -->
     <div class="text-center bg-slate-900/50 border border-slate-700/40 rounded-lg py-1 px-2">
       <span class="text-[9px] text-slate-400">Ventana visible:</span>
       <div id="time-window-label" class="text-[11px] font-mono font-semibold text-sky-400">Calculando rango...</div>
     </div>
 
+    <!-- BOTONES ATRÁS / ACTUAL / ADELANTE -->
     <div class="flex items-center justify-center gap-3">
       <button onclick="navigateWindow(-1)" id="btn-prev-nav" title="Retroceder" class="p-2 px-4 text-xs font-semibold rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition active:scale-95">‹</button>
       <button onclick="goLive()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition flex items-center gap-1.5">
@@ -385,9 +398,9 @@
   </div>
 
   <!-- GRÁFICA -->
-  <div class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2">
-    <!-- Barra de herramientas -->
-    <div class="flex justify-between items-center flex-wrap gap-2">
+  <div id="chart-card" class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2">
+    <!-- Barra de herramientas: filtros + acciones -->
+    <div id="chart-toolbar" class="flex justify-between items-center flex-wrap gap-2">
       <div class="flex items-center gap-2 flex-wrap">
         <label class="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" id="chk-s1" checked onchange="updateChartVisibility()">
@@ -423,35 +436,36 @@
           </svg>
         </button>
 
-        <!-- Descargar PNG fondo oscuro -->
-        <button onclick="downloadChartPNG('dark')" title="Descargar PNG fondo oscuro"
-          class="px-2 py-1.5 rounded-lg bg-slate-900 hover:bg-black text-cyan-300 border border-cyan-500/40 text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
+        <!-- Descargar PNG gráfica -->
+        <button onclick="downloadChartPNG(event)" title="Descargar solo la gráfica en alta resolución"
+          class="download-btn px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
-          🌙
+          PNG
         </button>
 
-        <!-- Descargar PNG fondo claro -->
-        <button onclick="downloadChartPNG('light')" title="Descargar PNG fondo claro"
-          class="px-2 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
+        <!-- Descargar PNG pantalla completa -->
+        <button onclick="downloadFullScreenPNG(event)" title="Descargar toda la pantalla como imagen"
+          class="download-btn px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
-          ☀️
+          Full
         </button>
       </div>
     </div>
 
-    <!-- Leyenda -->
+    <!-- Leyenda (controlada por nosotros, no por Chart.js) -->
     <div id="chart-legend"></div>
 
-    <!-- Contenedor de la gráfica -->
+    <!-- Contenedor de la gráfica (touch-action:none para el zoom) -->
     <div id="chart-wrapper" class="relative h-64 md:h-80">
       <canvas id="tempChart"></canvas>
     </div>
 
-    <div class="text-center text-[9px] text-slate-500">
+    <!-- Hint de gestos -->
+    <div id="chart-hint" class="text-center text-[9px] text-slate-500">
       Pellizca para zoom · Arrastra para desplazar · Doble toque para reset
     </div>
   </div>
@@ -492,10 +506,10 @@
   let isFetching = false;
   let alarmActive = false;
 
-  /* ESTADO DEL SISTEMA */
+  /* ESTADO DEL SISTEMA (independiente de la ventana visible) */
   let latestAbsolute = null;
 
-  /* ESTADO DE CONEXIÓN */
+  /* ESTADO DE CONEXIÓN (ESP32 / SUPABASE) */
   const ESP_CONNECTED_MAX_AGE_MS = 35000;
   const POLL_INTERVAL_MS = 10000;
   const pageLoadedAt = Date.now();
@@ -508,24 +522,30 @@
   let isPolling = false;
   let diagRunning = false;
 
+  /* HABILITAR VIBRACIÓN AL TOCAR PANTALLA */
   function enableVibrationOnTouch() {
-    if ("vibrate" in navigator) navigator.vibrate(10);
+    if ("vibrate" in navigator) {
+      navigator.vibrate(10);
+    }
   }
 
+  /* SISTEMA DE VIBRACIÓN DE ALARMA CADA 10 SEGUNDOS */
   setInterval(() => {
-    if (alarmActive && "vibrate" in navigator) navigator.vibrate(1000);
+    if (alarmActive && "vibrate" in navigator) {
+      navigator.vibrate(1000);
+    }
   }, 10000);
 
   /* ============================================================
-     GRÁFICA
+     GRÁFICA INICIALIZACIÓN
      ============================================================ */
 
   const DATASET_META = [
-    { label: "SONDA 1",       color: "#38bdf8" },
-    { label: "SONDA 2",       color: "#f87171" },
-    { label: "ΔT",            color: "#fbbf24" },
-    { label: "P.H. Esperada", color: "#34d399" },
-    { label: "P.H. Medida",   color: "#a7f3d0" }
+    { label: "SONDA 1",      color: "#38bdf8", visible: true },
+    { label: "SONDA 2",      color: "#f87171", visible: true },
+    { label: "ΔT",           color: "#fbbf24", visible: true },
+    { label: "P.H. Esperada",color: "#34d399", visible: true },
+    { label: "P.H. Medida",  color: "#a7f3d0", visible: true }
   ];
 
   const ctx = document.getElementById("tempChart").getContext("2d");
@@ -534,17 +554,37 @@
     data: {
       labels: [],
       datasets: [
-        { label: "SONDA 1", borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,.06)",
-          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true },
-        { label: "SONDA 2", borderColor: "#f87171", backgroundColor: "rgba(248,113,113,.06)",
-          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true },
-        { label: "ΔT", borderColor: "#fbbf24", backgroundColor: "rgba(251,191,36,.06)",
-          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true },
-        { label: "P.H. Esperada", borderColor: "#34d399", backgroundColor: "rgba(52,211,153,.04)",
-          data: [], borderWidth: 2.5, tension: .15, pointRadius: 1.5, pointHoverRadius: 5, fill: false, yAxisID: "pressure" },
-        { label: "P.H. Medida", borderColor: "#a7f3d0", backgroundColor: "rgba(167,243,208,.0)",
+        {
+          label: "SONDA 1",
+          borderColor: "#38bdf8",
+          backgroundColor: "rgba(56,189,248,.04)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "SONDA 2",
+          borderColor: "#f87171",
+          backgroundColor: "rgba(248,113,113,.04)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "ΔT",
+          borderColor: "#fbbf24",
+          backgroundColor: "rgba(251,191,36,.04)",
+          data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
+        },
+        {
+          label: "P.H. Esperada",
+          borderColor: "#34d399",
+          backgroundColor: "rgba(52,211,153,.03)",
+          data: [], borderWidth: 2.5, tension: .15, pointRadius: 1.5, pointHoverRadius: 5, fill: false, yAxisID: "pressure"
+        },
+        {
+          label: "P.H. Medida",
+          borderColor: "#a7f3d0",
+          backgroundColor: "rgba(167,243,208,.0)",
           data: [], borderWidth: 0, tension: 0, pointRadius: 5, pointHoverRadius: 6,
-          showLine: false, fill: false, yAxisID: "pressure" }
+          showLine: false, fill: false, yAxisID: "pressure"
+        }
       ]
     },
     options: {
@@ -555,26 +595,25 @@
       scales: {
         x: {
           ticks: { color: "#94a3b8", font: { size: 10 }, maxTicksLimit: 8 },
-          grid: { color: "#1e293b" },
-          title: { display: true, text: "Hora", color: "#64748b", font: { size: 9 } }
+          grid: { color: "#1e293b" }
         },
         y: {
           grace: "5%",
           ticks: { color: "#94a3b8", font: { size: 10 } },
           grid: { color: "#1e293b" },
-          title: { display: true, text: "°C", color: "#94a3b8", font: { size: 9 } }
+          title: { display: true, text: "°C", color: "#94a3b8", font: { size: 10 } }
         },
         pressure: {
           position: "right",
-          display: false,
+          display: false,   // se activa dinámicamente cuando hay datos
           grace: "5%",
           ticks: { color: "#34d399", font: { size: 10 } },
           grid: { drawOnChartArea: false },
-          title: { display: true, text: "PSI", color: "#34d399", font: { size: 9 } }
+          title: { display: true, text: "PSI", color: "#34d399", font: { size: 10 } }
         }
       },
       plugins: {
-        legend: { display: false },
+        legend: { display: false },  // usamos nuestra propia leyenda HTML
         tooltip: {
           backgroundColor: "rgba(15,23,42,0.95)",
           borderColor: "#334155",
@@ -591,6 +630,7 @@
             }
           }
         },
+        /* ================= ZOOM / PAN TÁCTIL ================= */
         zoom: {
           limits: {
             x: { min: "original", max: "original" },
@@ -614,64 +654,7 @@
   });
 
   /* ============================================================
-     AUTO-ESCALADO DEL EJE Y
-     ============================================================ */
-
-  function autoScaleAxes() {
-    // Si el usuario tiene zoom activo, no tocar
-    const zoomed = tempChart.isZoomedOrPanned && tempChart.isZoomedOrPanned();
-    if (zoomed) return;
-
-    // --- Eje Y izquierdo (temperaturas) ---
-    const tempVals = [];
-    [0, 1, 2].forEach(i => {
-      if (tempChart.isDatasetVisible(i)) {
-        tempChart.data.datasets[i].data.forEach(v => {
-          if (v !== null && Number.isFinite(v)) tempVals.push(v);
-        });
-      }
-    });
-
-    if (tempVals.length) {
-      const dMin = Math.min(...tempVals);
-      const dMax = Math.max(...tempVals);
-      const range = dMax - dMin;
-      const margin = Math.max(0.5, range * 0.15);
-      tempChart.options.scales.y.min = Math.floor((dMin - margin) * 2) / 2;
-      tempChart.options.scales.y.max = Math.ceil((dMax + margin) * 2) / 2;
-    } else {
-      tempChart.options.scales.y.min = undefined;
-      tempChart.options.scales.y.max = undefined;
-    }
-
-    // --- Eje derecho (presión) ---
-    const pVals = [];
-    [3, 4].forEach(i => {
-      if (tempChart.isDatasetVisible(i)) {
-        tempChart.data.datasets[i].data.forEach(v => {
-          if (v !== null && Number.isFinite(v)) pVals.push(v);
-        });
-      }
-    });
-
-    const hasPressureData = pVals.length > 0;
-    tempChart.options.scales.pressure.display = hasPressureData;
-
-    if (hasPressureData) {
-      const pMin = Math.min(...pVals);
-      const pMax = Math.max(...pVals);
-      const pRange = pMax - pMin;
-      const pMargin = Math.max(2, pRange * 0.15);
-      tempChart.options.scales.pressure.min = Math.floor(pMin - pMargin);
-      tempChart.options.scales.pressure.max = Math.ceil(pMax + pMargin);
-    } else {
-      tempChart.options.scales.pressure.min = undefined;
-      tempChart.options.scales.pressure.max = undefined;
-    }
-  }
-
-  /* ============================================================
-     LEYENDA PERSONALIZADA
+     LEYENDA PERSONALIZADA (clicable)
      ============================================================ */
 
   function buildChartLegend() {
@@ -710,144 +693,129 @@
   }
 
   /* ============================================================
-     ZOOM / RESET
+     AUTO-ESCALADO DEL EJE Y
+     Se recalcula cada render, pero se respeta el zoom del usuario
+     ============================================================ */
+
+  function autoScaleYAxis(s1Data, s2Data, deltaData, pressureExpData, pressureMeasData) {
+    const isZoomed = tempChart.isZoomedOrPanned && tempChart.isZoomedOrPanned();
+    if (isZoomed) return;  // si el usuario ha hecho zoom, no tocar escalas
+
+    // --- Eje Y izquierdo (temperaturas) ---
+    const tempVals = [...s1Data, ...s2Data, ...deltaData]
+      .filter(v => v !== null && Number.isFinite(v));
+
+    if (tempVals.length) {
+      const tMin = Math.min(...tempVals);
+      const tMax = Math.max(...tempVals);
+      const range = tMax - tMin;
+      const margin = Math.max(0.5, range * 0.12);
+      tempChart.options.scales.y.min = Math.floor((tMin - margin) * 2) / 2;
+      tempChart.options.scales.y.max = Math.ceil((tMax + margin) * 2) / 2;
+    } else {
+      tempChart.options.scales.y.min = undefined;
+      tempChart.options.scales.y.max = undefined;
+    }
+
+    // --- Eje Y derecho (presión) ---
+    const pVals = [...pressureExpData, ...pressureMeasData]
+      .filter(v => v !== null && Number.isFinite(v));
+
+    const hasPressureData = pVals.length > 0;
+    tempChart.options.scales.pressure.display = hasPressureData;
+
+    if (hasPressureData) {
+      const pMin = Math.min(...pVals);
+      const pMax = Math.max(...pVals);
+      const pRange = pMax - pMin;
+      const pMargin = Math.max(2, pRange * 0.12);
+      tempChart.options.scales.pressure.min = Math.floor((pMin - pMargin) * 2) / 2;
+      tempChart.options.scales.pressure.max = Math.ceil((pMax + pMargin) * 2) / 2;
+    } else {
+      tempChart.options.scales.pressure.min = undefined;
+      tempChart.options.scales.pressure.max = undefined;
+    }
+  }
+
+  /* ============================================================
+     ZOOM / RESET / DESCARGA PNG
      ============================================================ */
 
   function resetChartZoom() {
     if (tempChart.resetZoom) tempChart.resetZoom();
     if ("vibrate" in navigator) navigator.vibrate(15);
-    // Tras el reset, re-escalar
-    autoScaleAxes();
-    tempChart.update("none");
   }
 
-  /* ============================================================
-     EXPORT PNG CON TEMAS (fondo pintado en canvas temporal)
-     ============================================================ */
+  /* Descarga solo la tarjeta de la gráfica (con leyenda y título) */
+  async function downloadChartPNG(evt) {
+    const btn = evt?.currentTarget || evt?.target;
+    await captureAndDownload("chart-card", btn, "grafica");
+  }
 
-  const EXPORT_THEMES = {
-    dark: {
-      bg: "#000000",
-      gridColor: "#1f1f1f",
-      tickColor: "#e2e8f0",
-      titleColor: "#e2e8f0",
-      borderColors: ["#00d4ff", "#ff5577", "#ffc700", "#00ff88", "#88ffbb"],
-      pointColors:  ["#00d4ff", "#ff5577", "#ffc700", "#00ff88", "#88ffbb"],
-      legendColor: "#e2e8f0"
-    },
-    light: {
-      bg: "#ffffff",
-      gridColor: "#e2e8f0",
-      tickColor: "#1e293b",
-      titleColor: "#1e293b",
-      borderColors: ["#0284c7", "#dc2626", "#d97706", "#059669", "#065f46"],
-      pointColors:  ["#0284c7", "#dc2626", "#d97706", "#059669", "#065f46"],
-      legendColor: "#1e293b"
+  /* Descarga toda la pantalla de la app */
+  async function downloadFullScreenPNG(evt) {
+    const btn = evt?.currentTarget || evt?.target;
+    await captureAndDownload("app-wrapper", btn, "pantalla");
+  }
+
+  async function captureAndDownload(elementId, btn, suffix) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    // Feedback visual
+    const originalHTML = btn ? btn.innerHTML : null;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = "⏳";
     }
-  };
 
-  async function downloadChartPNG(theme = "dark") {
-    const t = EXPORT_THEMES[theme] || EXPORT_THEMES.dark;
+    if ("vibrate" in navigator) navigator.vibrate(20);
 
-    // 1. Guardar estado original
-    const original = {
-      borderColors: tempChart.data.datasets.map(d => d.borderColor),
-      pointColors:  tempChart.data.datasets.map(d => d.pointBackgroundColor),
-      borderWidths: tempChart.data.datasets.map(d => d.borderWidth),
-      fills:        tempChart.data.datasets.map(d => d.fill),
-      bgColors:     tempChart.data.datasets.map(d => d.backgroundColor),
-      gridX:        tempChart.options.scales.x.grid.color,
-      gridY:        tempChart.options.scales.y.grid.color,
-      tickX:        tempChart.options.scales.x.ticks.color,
-      tickY:        tempChart.options.scales.y.ticks.color,
-      titleX:       tempChart.options.scales.x.title?.color,
-      titleY:       tempChart.options.scales.y.title?.color,
-      titleP:       tempChart.options.scales.pressure.title?.color,
-      tickP:        tempChart.options.scales.pressure.ticks.color,
-      canvasBg:     tempChart.canvas.style.background,
-      width:        tempChart.width,
-      height:       tempChart.height
-    };
+    try {
+      // En modo ePaper usamos fondo blanco; si no, slate-900
+      const bgColor = isEPaper ? "#ffffff" : "#0f172a";
 
-    // 2. Aplicar tema de exportación
-    tempChart.data.datasets.forEach((d, i) => {
-      d.borderColor = t.borderColors[i] || t.borderColors[0];
-      d.pointBackgroundColor = t.pointColors[i] || t.pointColors[0];
-      d.borderWidth = 3;
-      d.fill = false;
-      d.backgroundColor = "transparent";
-    });
+      const canvas = await html2canvas(el, {
+        scale: 3,                    // 3× → alta resolución de impresión
+        backgroundColor: bgColor,
+        logging: false,
+        useCORS: true,
+        allowTaint: false,
+        // Ignorar elementos con data-html2canvas-ignore
+        ignoreElements: (node) => node.hasAttribute && node.hasAttribute("data-html2canvas-ignore")
+      });
 
-    tempChart.options.scales.x.grid.color = t.gridColor;
-    tempChart.options.scales.y.grid.color = t.gridColor;
-    tempChart.options.scales.x.ticks.color = t.tickColor;
-    tempChart.options.scales.y.ticks.color = t.tickColor;
-    if (tempChart.options.scales.x.title) tempChart.options.scales.x.title.color = t.titleColor;
-    if (tempChart.options.scales.y.title) tempChart.options.scales.y.title.color = t.titleColor;
-    if (tempChart.options.scales.pressure.title) tempChart.options.scales.pressure.title.color = t.borderColors[3];
-    tempChart.options.scales.pressure.ticks.color = t.borderColors[3];
+      // Descargar
+      const now = new Date();
+      const stamp =
+        now.getFullYear() + "-" +
+        String(now.getMonth() + 1).padStart(2, "0") + "-" +
+        String(now.getDate()).padStart(2, "0") + "_" +
+        String(now.getHours()).padStart(2, "0") + "-" +
+        String(now.getMinutes()).padStart(2, "0") + "-" +
+        String(now.getSeconds()).padStart(2, "0");
 
-    // 3. Redimensionar a alta resolución
-    const hiResWidth  = Math.max(2000, original.width * 2.5);
-    const hiResHeight = Math.max(1200, original.height * 2.5);
-    tempChart.resize(hiResWidth, hiResHeight);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png", 1);
+      a.download = `termometro_${suffix}_${stamp}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
 
-    // 4. Repintar y esperar
-    tempChart.update("none");
-    await new Promise(r => setTimeout(r, 200));
-
-    // 5. Crear canvas temporal con fondo pintado
-    const tmpCanvas = document.createElement("canvas");
-    tmpCanvas.width = hiResWidth;
-    tmpCanvas.height = hiResHeight;
-    const tmpCtx = tmpCanvas.getContext("2d");
-
-    tmpCtx.fillStyle = t.bg;
-    tmpCtx.fillRect(0, 0, hiResWidth, hiResHeight);
-    tmpCtx.drawImage(tempChart.canvas, 0, 0);
-
-    const dataURL = tmpCanvas.toDataURL("image/png");
-
-    // 6. Restaurar tamaño y estado
-    tempChart.resize(original.width, original.height);
-    tempChart.data.datasets.forEach((d, i) => {
-      d.borderColor = original.borderColors[i];
-      d.pointBackgroundColor = original.pointColors[i];
-      d.borderWidth = original.borderWidths[i];
-      d.fill = original.fills[i];
-      d.backgroundColor = original.bgColors[i];
-    });
-    tempChart.options.scales.x.grid.color = original.gridX;
-    tempChart.options.scales.y.grid.color = original.gridY;
-    tempChart.options.scales.x.ticks.color = original.tickX;
-    tempChart.options.scales.y.ticks.color = original.tickY;
-    if (tempChart.options.scales.x.title) tempChart.options.scales.x.title.color = original.titleX;
-    if (tempChart.options.scales.y.title) tempChart.options.scales.y.title.color = original.titleY;
-    if (tempChart.options.scales.pressure.title) tempChart.options.scales.pressure.title.color = original.titleP;
-    tempChart.options.scales.pressure.ticks.color = original.tickP;
-    tempChart.canvas.style.background = original.canvasBg;
-    tempChart.update("none");
-
-    // 7. Descargar
-    const now = new Date();
-    const stamp = now.getFullYear() + "-" +
-      String(now.getMonth()+1).padStart(2,"0") + "-" +
-      String(now.getDate()).padStart(2,"0") + "_" +
-      String(now.getHours()).padStart(2,"0") + "-" +
-      String(now.getMinutes()).padStart(2,"0");
-
-    const a = document.createElement("a");
-    a.href = dataURL;
-    a.download = `termometro_${theme}_${stamp}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    if ("vibrate" in navigator) navigator.vibrate([20, 40, 20]);
+      if ("vibrate" in navigator) navigator.vibrate([20, 40, 20]);
+    } catch (err) {
+      console.error("Error al exportar PNG:", err);
+      if ("vibrate" in navigator) navigator.vibrate([100, 50, 100]);
+    } finally {
+      if (btn && originalHTML !== null) {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+      }
+    }
   }
 
   /* ============================================================
-     ESTADO DE CONEXIÓN
+     ESTADO DE CONEXIÓN: Conectado / Desconectado / Historial
      ============================================================ */
 
   const BADGE_BASE = "px-2.5 py-0.5 text-[10px] font-semibold rounded-full border cursor-pointer ";
@@ -918,6 +886,7 @@
     badge.className = BADGE_BASE + BADGE_STYLES[style];
     badge.title = tip;
 
+    // Atenuar la barra superior en modo historial
     const topBar = badge.closest(".bg-slate-800\\/60") || badge.parentElement?.parentElement;
     if (topBar) {
       topBar.style.opacity = isLive ? "1" : "0.75";
@@ -948,7 +917,7 @@
   }
 
   /* ============================================================
-     POLL: última lectura ABSOLUTA
+     POLL: última lectura ABSOLUTA (para barra superior)
      ============================================================ */
 
   async function pollLatest() {
@@ -1144,11 +1113,11 @@
           ].filter(Boolean).join(" · ");
 
           if (age < -10000) {
-            add("warn", "Reloj de este dispositivo", `La última lectura figura ${formatAge(-age)} en el futuro: el reloj de este dispositivo está atrasado.`);
+            add("warn", "Reloj de este dispositivo", `La última lectura figura ${formatAge(-age)} en el futuro: el reloj de este dispositivo está atrasado y el estado Conectado/Desconectado puede fallar.`);
           } else if (age <= ESP_CONNECTED_MAX_AGE_MS) {
             add("ok", "Datos del ESP32", `Transmitiendo · última lectura hace ${formatAge(age)}.${extra ? " " + extra : ""}`);
           } else {
-            add("warn", "Datos del ESP32", `Supabase responde bien, pero el ESP32 no envía desde hace ${formatAge(age)}.`);
+            add("warn", "Datos del ESP32", `Supabase responde bien, pero el ESP32 no envía desde hace ${formatAge(age)}. Revise alimentación, WiFi y el monitor serie (HTTP 201 = OK, 401/403 = clave o política INSERT, 404 = tabla).`);
           }
         }
       } catch (err) {
@@ -1159,7 +1128,7 @@
       const espActive = lastSeenAt && (Date.now() - lastSeenAt.getTime() <= ESP_CONNECTED_MAX_AGE_MS);
       if (realtimeStatus === "SUBSCRIBED") {
         if (realtimeEvents === 0 && espActive && Date.now() - pageLoadedAt > 30000) {
-          add("warn", "Realtime", "Canal suscrito, pero no llegan lecturas nuevas al instante. Active Realtime para la tabla.");
+          add("warn", "Realtime", "Canal suscrito, pero no llegan lecturas nuevas al instante. Active Realtime para la tabla (Database → Publications → supabase_realtime). No es crítico: la gráfica se refresca igual cada 30 s.");
         } else {
           add("ok", "Realtime", `Canal activo · ${realtimeEvents} evento(s) recibidos.`);
         }
@@ -1183,7 +1152,7 @@
     }
   }
 
-  /* ACTUALIZAR INDICADOR VISUAL DE FECHA / HORA */
+  /* ACTUALIZAR INDICADOR VISUAL DE FECHA / HORA DE VENTANA */
   function updateTimeWindowLabel() {
     const rangeMs = selectedHoursRange * 60 * 60 * 1000;
     const startTime = new Date(windowEndTime.getTime() - rangeMs);
@@ -1196,11 +1165,14 @@
     document.getElementById("time-window-label").innerHTML = `${startStr} ➔ ${endStr}${liveBadge}`;
   }
 
+  /* MODO RANGO DE TIEMPO */
   function setTimeRange(hours) {
     selectedHoursRange = hours;
     localStorage.setItem("selected-hours-range", hours);
     updateRangeUI();
-    if (isLive) windowEndTime = new Date();
+    if (isLive) {
+      windowEndTime = new Date();
+    }
     fetchData();
   }
 
@@ -1321,9 +1293,7 @@
     tempChart.setDatasetVisibility(2, delta);
     tempChart.setDatasetVisibility(3, pressure);
     tempChart.setDatasetVisibility(4, pressure);
-
-    autoScaleAxes();
-    tempChart.update("none");
+    tempChart.update();
     refreshLegendState();
   }
 
@@ -1384,10 +1354,14 @@
     return { ...row, s1, s2, delta, bateria, bateriaVolt: vBat, wifi, ip };
   }
 
-  /* BARRA SUPERIOR: BATERÍA Y WIFI (estado ABSOLUTO) */
+  /* ============================================================
+     BARRA SUPERIOR: BATERÍA Y WIFI (estado ABSOLUTO del sistema)
+     ============================================================ */
+
   function renderBatteryAndWifi() {
     if (!latestAbsolute) return;
 
+    // BATERÍA
     if (latestAbsolute.bateriaVolt !== null) {
       const v = latestAbsolute.bateriaVolt;
       const pct = latestAbsolute.bateria;
@@ -1404,9 +1378,12 @@
         batBar.className = "bg-rose-500 h-full transition-all duration-500";
         batIcon.className = "w-3.5 h-3.5 text-rose-500";
         batBanner.classList.remove("hidden");
-        batMsg.textContent = v <= 3.10
-          ? `Batería en nivel crítico (${v.toFixed(2)}V). El dispositivo entrará en modo de corte/protección.`
-          : `Nivel por debajo del 20% (${v.toFixed(2)}V). Cargue el dispositivo pronto.`;
+
+        if (v <= 3.10) {
+          batMsg.textContent = `Batería en nivel crítico (${v.toFixed(2)}V). El dispositivo entrará en modo de corte/protección.`;
+        } else {
+          batMsg.textContent = `Nivel por debajo del 20% (${v.toFixed(2)}V). Cargue el dispositivo pronto.`;
+        }
       } else if (pct <= 50) {
         batBar.className = "bg-amber-500 h-full transition-all duration-500";
         batIcon.className = "w-3.5 h-3.5 text-amber-400";
@@ -1418,14 +1395,18 @@
       }
     }
 
+    // WIFI + IP
     if (latestAbsolute.wifi) {
       document.getElementById("wifi-val").textContent = `Wifi: "${latestAbsolute.wifi}"`;
     }
-    document.getElementById("ip-val").textContent = latestAbsolute.ip
-      ? `IP: ${latestAbsolute.ip}` : "IP: --";
+    if (latestAbsolute.ip) {
+      document.getElementById("ip-val").textContent = `IP: ${latestAbsolute.ip}`;
+    } else {
+      document.getElementById("ip-val").textContent = `IP: --`;
+    }
   }
 
-  /* PRUEBA DE HERMETICIDAD */
+  /* PRUEBA DE HERMETICIDAD — BALANCE EVAP/COND CONFIGURABLE */
   const ATM_PSI = 14.696;
 
   let phS1Weight = parseInt(localStorage.getItem("ph-s1-weight"));
@@ -1569,12 +1550,14 @@
 
     if (!pressureReference) {
       pressureReference = {
-        timestamp, pressureGauge,
+        timestamp,
+        pressureGauge,
         tempS1C: Number(record.s1),
         tempS2C: Number(record.s2),
         tempRefC: Number(tEff),
         model: `${phS1Weight}/${phS2Weight}`
       };
+
       pressureLastMeasured = { timestamp, pressureGauge, tempC: Number(tEff) };
       pressureMeasurements = [{ timestamp, pressureGauge, tempC: Number(tEff) }];
     } else {
@@ -1589,7 +1572,7 @@
     renderData();
   }
 
-  /* NAVEGACIÓN Y FETCH */
+  /* NAVEGACIÓN Y OBTENCIÓN DE DATOS */
   function navigateWindow(direction) {
     isLive = false;
     updateConnectionBadge();
@@ -1639,7 +1622,7 @@
     }
   }
 
-  /* RENDERIZADO */
+  /* RENDERIZADO DE INTERFAZ (tarjetas del dominio visible) */
   function renderData() {
     updateTimeWindowLabel();
 
@@ -1749,6 +1732,7 @@
       document.getElementById("n2-elapsed").textContent = `Tiempo: ${elapsedHrs}h`;
     }
 
+    /* ---- Actualizar datasets ---- */
     tempChart.data.labels = labels;
     tempChart.data.datasets[0].data = s1Data;
     tempChart.data.datasets[1].data = s2Data;
@@ -1756,12 +1740,15 @@
     tempChart.data.datasets[3].data = pressureExpData;
     tempChart.data.datasets[4].data = pressureMeasData;
 
-    autoScaleAxes();
+    /* ---- Auto-escalado Y (solo si no hay zoom activo) ---- */
+    autoScaleYAxis(s1Data, s2Data, deltaData, pressureExpData, pressureMeasData);
+
+    /* ---- Render sin animación (evita flicker y preserva zoom) ---- */
     tempChart.update("none");
     refreshLegendState();
   }
 
-  /* INICIALIZACIÓN */
+  /* INICIALIZACIÓN DE LA APLICACIÓN */
   window.addEventListener("DOMContentLoaded", () => {
     loadSavedAlarms();
     loadPressureState();
