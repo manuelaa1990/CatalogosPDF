@@ -17,7 +17,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -88,19 +87,16 @@
       color:#fff !important;
     }
 
-    /* Botón "avanzar" deshabilitado en el presente */
     #btn-next:disabled {
       opacity: 0.3;
       cursor: not-allowed;
     }
 
-    /* Contenedor de la gráfica: permitir gestos táctiles del plugin de zoom */
     #chart-wrapper {
       touch-action: none;
       position: relative;
     }
 
-    /* Leyenda de la gráfica (Chart.js la coloca donde le indicamos) */
     #chart-legend {
       display: flex;
       flex-wrap: wrap;
@@ -134,18 +130,12 @@
     body.epaper-mode #chart-legend .legend-item {
       color: #000 !important;
     }
-
-    /* Feedback al pulsar botones de descarga */
-    .download-btn:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
   </style>
 </head>
 
 <body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6" onclick="enableVibrationOnTouch()">
 
-<div id="app-wrapper" class="max-w-md md:max-w-3xl mx-auto space-y-3">
+<div class="max-w-md md:max-w-3xl mx-auto space-y-3">
 
   <!-- BARRA SUPERIOR -->
   <div class="flex flex-wrap justify-between items-center bg-slate-800/60 border border-slate-700/50 px-3 py-1.5 rounded-xl text-xs gap-2 transition-opacity duration-300">
@@ -186,19 +176,19 @@
         <span>DB</span>
       </button>
 
-      <!-- ESTADO: Conectado / Desconectado / Historial -->
+      <!-- ESTADO -->
       <div id="status-badge" onclick="openDiagnostics()" title="Toque para diagnosticar" class="px-2.5 py-0.5 text-[10px] font-semibold rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 cursor-pointer">
         Verificando...
       </div>
     </div>
   </div>
 
-  <!-- BANNER DE ALERTA BATERÍA BAJA -->
+  <!-- BANNER BATERÍA BAJA -->
   <div id="bat-alert-banner" class="hidden bg-rose-600/20 border border-rose-500/50 p-2 rounded-xl text-center text-rose-300 text-xs animate-pulse">
     ⚠️ <strong>¡ALERTA DE BATERÍA BAJA!</strong> <span id="bat-alert-msg">Nivel por debajo del 20%. Cargue el dispositivo pronto.</span>
   </div>
 
-  <!-- BANNER DE DATOS OBSOLETOS -->
+  <!-- BANNER DATOS OBSOLETOS -->
   <div id="stale-banner" class="hidden bg-amber-600/20 border border-amber-500/50 p-2 rounded-xl text-center text-amber-300 text-xs">
     ⏸ <strong>Datos congelados.</strong> El ESP32 no envía lecturas desde hace más de 35 s. Las alarmas están en pausa hasta recibir datos nuevos.
   </div>
@@ -312,7 +302,6 @@
 
     <input type="datetime-local" id="n2-time-init" class="hidden">
 
-    <!-- BALANCE EVAP/COND (reparto configurable) -->
     <div class="mt-2 bg-slate-900/50 border border-slate-700/50 rounded-lg p-2 text-left">
       <div class="flex justify-between items-center mb-1.5">
         <label class="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Balance Evap/Cond</label>
@@ -370,9 +359,8 @@
     </button>
   </div>
 
-  <!-- CONTROLES DE NAVEGACIÓN Y RANGO DE TIEMPO -->
+  <!-- CONTROLES DE NAVEGACIÓN -->
   <div class="bg-slate-800 border border-slate-700/60 p-2 rounded-xl shadow-md space-y-2">
-    <!-- SELECTOR DE HORAS -->
     <div class="grid grid-cols-5 gap-1 bg-slate-900/70 p-1 rounded-lg text-[10px] font-bold text-center">
       <button id="btn-range-2" onclick="setTimeRange(2)" class="py-1 rounded-md transition">2h</button>
       <button id="btn-range-4" onclick="setTimeRange(4)" class="py-1 rounded-md transition">4h</button>
@@ -381,13 +369,11 @@
       <button id="btn-range-24" onclick="setTimeRange(24)" class="py-1 rounded-md transition">24h</button>
     </div>
 
-    <!-- INDICADOR VISUAL DEL RANGO DE FECHA/HORA ACTUAL -->
     <div class="text-center bg-slate-900/50 border border-slate-700/40 rounded-lg py-1 px-2">
       <span class="text-[9px] text-slate-400">Ventana visible:</span>
       <div id="time-window-label" class="text-[11px] font-mono font-semibold text-sky-400">Calculando rango...</div>
     </div>
 
-    <!-- BOTONES ATRÁS / ACTUAL / ADELANTE -->
     <div class="flex items-center justify-center gap-3">
       <button onclick="navigateWindow(-1)" id="btn-prev-nav" title="Retroceder" class="p-2 px-4 text-xs font-semibold rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition active:scale-95">‹</button>
       <button onclick="goLive()" class="px-4 py-2 text-xs font-semibold rounded-lg bg-sky-600 hover:bg-sky-500 text-white transition flex items-center gap-1.5">
@@ -398,9 +384,8 @@
   </div>
 
   <!-- GRÁFICA -->
-  <div id="chart-card" class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2">
-    <!-- Barra de herramientas: filtros + acciones -->
-    <div id="chart-toolbar" class="flex justify-between items-center flex-wrap gap-2">
+  <div class="bg-slate-800 border border-slate-700/60 p-3 rounded-xl shadow-md space-y-2">
+    <div class="flex justify-between items-center flex-wrap gap-2">
       <div class="flex items-center gap-2 flex-wrap">
         <label class="flex items-center gap-1.5 cursor-pointer">
           <input type="checkbox" id="chk-s1" checked onchange="updateChartVisibility()">
@@ -420,7 +405,7 @@
           <span class="text-[10px] text-slate-300">ΔT</span>
         </label>
 
-        <label id="pressure-chart-selector" class="flex items-center gap-1.5 cursor-pointer">
+        <label id="pressure-chart-selector" class="flex items-center gap-1.5 cursor-pointer hidden">
           <input type="checkbox" id="chk-pressure" checked onchange="togglePressureMode(this.checked)">
           <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block"></span>
           <span class="text-[10px] text-slate-300">P.H.</span>
@@ -428,7 +413,6 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <!-- Reset zoom -->
         <button onclick="resetChartZoom()" title="Restablecer zoom"
           class="p-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 transition active:scale-95">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,36 +420,23 @@
           </svg>
         </button>
 
-        <!-- Descargar PNG gráfica -->
-        <button onclick="downloadChartPNG(event)" title="Descargar solo la gráfica en alta resolución"
-          class="download-btn px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
+        <button onclick="downloadChartPNG()" title="Descargar imagen en alta resolución"
+          class="px-2 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
           </svg>
           PNG
         </button>
-
-        <!-- Descargar PNG pantalla completa -->
-        <button onclick="downloadFullScreenPNG(event)" title="Descargar toda la pantalla como imagen"
-          class="download-btn px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-semibold transition active:scale-95 flex items-center gap-1">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-          </svg>
-          Full
-        </button>
       </div>
     </div>
 
-    <!-- Leyenda (controlada por nosotros, no por Chart.js) -->
     <div id="chart-legend"></div>
 
-    <!-- Contenedor de la gráfica (touch-action:none para el zoom) -->
     <div id="chart-wrapper" class="relative h-64 md:h-80">
       <canvas id="tempChart"></canvas>
     </div>
 
-    <!-- Hint de gestos -->
-    <div id="chart-hint" class="text-center text-[9px] text-slate-500">
+    <div class="text-center text-[9px] text-slate-500">
       Pellizca para zoom · Arrastra para desplazar · Doble toque para reset
     </div>
   </div>
@@ -509,7 +480,7 @@
   /* ESTADO DEL SISTEMA (independiente de la ventana visible) */
   let latestAbsolute = null;
 
-  /* ESTADO DE CONEXIÓN (ESP32 / SUPABASE) */
+  /* ESTADO DE CONEXIÓN */
   const ESP_CONNECTED_MAX_AGE_MS = 35000;
   const POLL_INTERVAL_MS = 10000;
   const pageLoadedAt = Date.now();
@@ -522,14 +493,12 @@
   let isPolling = false;
   let diagRunning = false;
 
-  /* HABILITAR VIBRACIÓN AL TOCAR PANTALLA */
   function enableVibrationOnTouch() {
     if ("vibrate" in navigator) {
       navigator.vibrate(10);
     }
   }
 
-  /* SISTEMA DE VIBRACIÓN DE ALARMA CADA 10 SEGUNDOS */
   setInterval(() => {
     if (alarmActive && "vibrate" in navigator) {
       navigator.vibrate(1000);
@@ -557,25 +526,25 @@
         {
           label: "SONDA 1",
           borderColor: "#38bdf8",
-          backgroundColor: "rgba(56,189,248,.04)",
+          backgroundColor: "rgba(56,189,248,.06)",
           data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
         },
         {
           label: "SONDA 2",
           borderColor: "#f87171",
-          backgroundColor: "rgba(248,113,113,.04)",
+          backgroundColor: "rgba(248,113,113,.06)",
           data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
         },
         {
           label: "ΔT",
           borderColor: "#fbbf24",
-          backgroundColor: "rgba(251,191,36,.04)",
+          backgroundColor: "rgba(251,191,36,.06)",
           data: [], borderWidth: 2.5, tension: .2, pointRadius: 1.5, pointHoverRadius: 5, fill: true
         },
         {
           label: "P.H. Esperada",
           borderColor: "#34d399",
-          backgroundColor: "rgba(52,211,153,.03)",
+          backgroundColor: "rgba(52,211,153,.04)",
           data: [], borderWidth: 2.5, tension: .15, pointRadius: 1.5, pointHoverRadius: 5, fill: false, yAxisID: "pressure"
         },
         {
@@ -600,20 +569,18 @@
         y: {
           grace: "5%",
           ticks: { color: "#94a3b8", font: { size: 10 } },
-          grid: { color: "#1e293b" },
-          title: { display: true, text: "°C", color: "#94a3b8", font: { size: 10 } }
+          grid: { color: "#1e293b" }
         },
         pressure: {
           position: "right",
-          display: false,   // se activa dinámicamente cuando hay datos
+          display: false,   // ← CAMBIO: arranca OCULTO, se enciende solo en modo P.H.
           grace: "5%",
           ticks: { color: "#34d399", font: { size: 10 } },
-          grid: { drawOnChartArea: false },
-          title: { display: true, text: "PSI", color: "#34d399", font: { size: 10 } }
+          grid: { drawOnChartArea: false }
         }
       },
       plugins: {
-        legend: { display: false },  // usamos nuestra propia leyenda HTML
+        legend: { display: false },
         tooltip: {
           backgroundColor: "rgba(15,23,42,0.95)",
           borderColor: "#334155",
@@ -630,7 +597,6 @@
             }
           }
         },
-        /* ================= ZOOM / PAN TÁCTIL ================= */
         zoom: {
           limits: {
             x: { min: "original", max: "original" },
@@ -654,19 +620,27 @@
   });
 
   /* ============================================================
-     LEYENDA PERSONALIZADA (clicable)
+     LEYENDA PERSONALIZADA
      ============================================================ */
 
   function buildChartLegend() {
     const legendEl = document.getElementById("chart-legend");
     if (!legendEl) return;
 
-    legendEl.innerHTML = DATASET_META.map((meta, i) => `
-      <div class="legend-item ${tempChart.isDatasetVisible(i) ? "" : "hidden-dataset"}" data-idx="${i}">
-        <span class="legend-swatch" style="background:${meta.color}"></span>
-        <span>${meta.label}</span>
-      </div>
-    `).join("");
+    // En modo Termómetro solo mostramos S1, S2, ΔT (las 3 primeras)
+    const visibleMeta = workMode === "ph"
+      ? DATASET_META
+      : DATASET_META.slice(0, 3);
+
+    legendEl.innerHTML = visibleMeta.map((meta, i) => {
+      const realIdx = DATASET_META.indexOf(meta);
+      return `
+        <div class="legend-item ${tempChart.isDatasetVisible(realIdx) ? "" : "hidden-dataset"}" data-idx="${realIdx}">
+          <span class="legend-swatch" style="background:${meta.color}"></span>
+          <span>${meta.label}</span>
+        </div>
+      `;
+    }).join("");
 
     legendEl.querySelectorAll(".legend-item").forEach(item => {
       item.addEventListener("click", () => {
@@ -693,51 +667,6 @@
   }
 
   /* ============================================================
-     AUTO-ESCALADO DEL EJE Y
-     Se recalcula cada render, pero se respeta el zoom del usuario
-     ============================================================ */
-
-  function autoScaleYAxis(s1Data, s2Data, deltaData, pressureExpData, pressureMeasData) {
-    const isZoomed = tempChart.isZoomedOrPanned && tempChart.isZoomedOrPanned();
-    if (isZoomed) return;  // si el usuario ha hecho zoom, no tocar escalas
-
-    // --- Eje Y izquierdo (temperaturas) ---
-    const tempVals = [...s1Data, ...s2Data, ...deltaData]
-      .filter(v => v !== null && Number.isFinite(v));
-
-    if (tempVals.length) {
-      const tMin = Math.min(...tempVals);
-      const tMax = Math.max(...tempVals);
-      const range = tMax - tMin;
-      const margin = Math.max(0.5, range * 0.12);
-      tempChart.options.scales.y.min = Math.floor((tMin - margin) * 2) / 2;
-      tempChart.options.scales.y.max = Math.ceil((tMax + margin) * 2) / 2;
-    } else {
-      tempChart.options.scales.y.min = undefined;
-      tempChart.options.scales.y.max = undefined;
-    }
-
-    // --- Eje Y derecho (presión) ---
-    const pVals = [...pressureExpData, ...pressureMeasData]
-      .filter(v => v !== null && Number.isFinite(v));
-
-    const hasPressureData = pVals.length > 0;
-    tempChart.options.scales.pressure.display = hasPressureData;
-
-    if (hasPressureData) {
-      const pMin = Math.min(...pVals);
-      const pMax = Math.max(...pVals);
-      const pRange = pMax - pMin;
-      const pMargin = Math.max(2, pRange * 0.12);
-      tempChart.options.scales.pressure.min = Math.floor((pMin - pMargin) * 2) / 2;
-      tempChart.options.scales.pressure.max = Math.ceil((pMax + pMargin) * 2) / 2;
-    } else {
-      tempChart.options.scales.pressure.min = undefined;
-      tempChart.options.scales.pressure.max = undefined;
-    }
-  }
-
-  /* ============================================================
      ZOOM / RESET / DESCARGA PNG
      ============================================================ */
 
@@ -746,76 +675,43 @@
     if ("vibrate" in navigator) navigator.vibrate(15);
   }
 
-  /* Descarga solo la tarjeta de la gráfica (con leyenda y título) */
-  async function downloadChartPNG(evt) {
-    const btn = evt?.currentTarget || evt?.target;
-    await captureAndDownload("chart-card", btn, "grafica");
-  }
+  function downloadChartPNG() {
+    const originalCanvas = tempChart.canvas;
+    const originalWidth = originalCanvas.width;
+    const originalHeight = originalCanvas.height;
+    const scale = 2;
 
-  /* Descarga toda la pantalla de la app */
-  async function downloadFullScreenPNG(evt) {
-    const btn = evt?.currentTarget || evt?.target;
-    await captureAndDownload("app-wrapper", btn, "pantalla");
-  }
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = originalWidth * scale;
+    tempCanvas.height = originalHeight * scale;
 
-  async function captureAndDownload(elementId, btn, suffix) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
+    const tempCtx = tempCanvas.getContext("2d");
+    tempCtx.scale(scale, scale);
 
-    // Feedback visual
-    const originalHTML = btn ? btn.innerHTML : null;
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = "⏳";
-    }
+    tempCtx.fillStyle = isEPaper ? "#ffffff" : "#0f172a";
+    tempCtx.fillRect(0, 0, originalWidth, originalHeight);
+    tempCtx.drawImage(originalCanvas, 0, 0);
 
-    if ("vibrate" in navigator) navigator.vibrate(20);
+    const now = new Date();
+    const stamp =
+      now.getFullYear() + "-" +
+      String(now.getMonth() + 1).padStart(2, "0") + "-" +
+      String(now.getDate()).padStart(2, "0") + "_" +
+      String(now.getHours()).padStart(2, "0") + "-" +
+      String(now.getMinutes()).padStart(2, "0");
 
-    try {
-      // En modo ePaper usamos fondo blanco; si no, slate-900
-      const bgColor = isEPaper ? "#ffffff" : "#0f172a";
+    const a = document.createElement("a");
+    a.href = tempCanvas.toDataURL("image/png", 1);
+    a.download = `termometro_${stamp}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-      const canvas = await html2canvas(el, {
-        scale: 3,                    // 3× → alta resolución de impresión
-        backgroundColor: bgColor,
-        logging: false,
-        useCORS: true,
-        allowTaint: false,
-        // Ignorar elementos con data-html2canvas-ignore
-        ignoreElements: (node) => node.hasAttribute && node.hasAttribute("data-html2canvas-ignore")
-      });
-
-      // Descargar
-      const now = new Date();
-      const stamp =
-        now.getFullYear() + "-" +
-        String(now.getMonth() + 1).padStart(2, "0") + "-" +
-        String(now.getDate()).padStart(2, "0") + "_" +
-        String(now.getHours()).padStart(2, "0") + "-" +
-        String(now.getMinutes()).padStart(2, "0") + "-" +
-        String(now.getSeconds()).padStart(2, "0");
-
-      const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png", 1);
-      a.download = `termometro_${suffix}_${stamp}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      if ("vibrate" in navigator) navigator.vibrate([20, 40, 20]);
-    } catch (err) {
-      console.error("Error al exportar PNG:", err);
-      if ("vibrate" in navigator) navigator.vibrate([100, 50, 100]);
-    } finally {
-      if (btn && originalHTML !== null) {
-        btn.disabled = false;
-        btn.innerHTML = originalHTML;
-      }
-    }
+    if ("vibrate" in navigator) navigator.vibrate([20, 40, 20]);
   }
 
   /* ============================================================
-     ESTADO DE CONEXIÓN: Conectado / Desconectado / Historial
+     ESTADO DE CONEXIÓN
      ============================================================ */
 
   const BADGE_BASE = "px-2.5 py-0.5 text-[10px] font-semibold rounded-full border cursor-pointer ";
@@ -886,7 +782,6 @@
     badge.className = BADGE_BASE + BADGE_STYLES[style];
     badge.title = tip;
 
-    // Atenuar la barra superior en modo historial
     const topBar = badge.closest(".bg-slate-800\\/60") || badge.parentElement?.parentElement;
     if (topBar) {
       topBar.style.opacity = isLive ? "1" : "0.75";
@@ -915,10 +810,6 @@
     });
     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
-
-  /* ============================================================
-     POLL: última lectura ABSOLUTA (para barra superior)
-     ============================================================ */
 
   async function pollLatest() {
     if (isPolling || document.hidden) return;
@@ -1233,6 +1124,8 @@
     if (isPH) togglePressureMode(true);
     else togglePressureMode(false);
 
+    // Reconstruir leyenda para mostrar solo las series relevantes al modo
+    buildChartLegend();
     updateChartVisibility();
   }
 
@@ -1282,17 +1175,27 @@
     updateChartVisibility();
   }
 
+  // CAMBIO CLAVE: el eje de presión y sus series solo se activan en modo P.H.
   function updateChartVisibility() {
     const s1 = document.getElementById("chk-s1").checked;
     const s2 = document.getElementById("chk-s2").checked;
     const delta = document.getElementById("chk-delta").checked;
-    const pressure = document.getElementById("chk-pressure").checked && pressureTestVisible;
+
+    const pressureChk = document.getElementById("chk-pressure");
+    const pressureChecked = pressureChk ? pressureChk.checked : false;
+
+    // La presión SOLO tiene sentido en modo P.H.
+    const showPressureSeries = (workMode === "ph") && pressureChecked && pressureTestVisible;
 
     tempChart.setDatasetVisibility(0, s1);
     tempChart.setDatasetVisibility(1, s2);
     tempChart.setDatasetVisibility(2, delta);
-    tempChart.setDatasetVisibility(3, pressure);
-    tempChart.setDatasetVisibility(4, pressure);
+    tempChart.setDatasetVisibility(3, showPressureSeries);
+    tempChart.setDatasetVisibility(4, showPressureSeries);
+
+    // Apagar/encender el eje derecho según corresponda
+    tempChart.options.scales.pressure.display = showPressureSeries;
+
     tempChart.update();
     refreshLegendState();
   }
@@ -1354,14 +1257,10 @@
     return { ...row, s1, s2, delta, bateria, bateriaVolt: vBat, wifi, ip };
   }
 
-  /* ============================================================
-     BARRA SUPERIOR: BATERÍA Y WIFI (estado ABSOLUTO del sistema)
-     ============================================================ */
-
+  /* BARRA SUPERIOR: BATERÍA Y WIFI (estado ABSOLUTO) */
   function renderBatteryAndWifi() {
     if (!latestAbsolute) return;
 
-    // BATERÍA
     if (latestAbsolute.bateriaVolt !== null) {
       const v = latestAbsolute.bateriaVolt;
       const pct = latestAbsolute.bateria;
@@ -1395,7 +1294,6 @@
       }
     }
 
-    // WIFI + IP
     if (latestAbsolute.wifi) {
       document.getElementById("wifi-val").textContent = `Wifi: "${latestAbsolute.wifi}"`;
     }
@@ -1622,7 +1520,7 @@
     }
   }
 
-  /* RENDERIZADO DE INTERFAZ (tarjetas del dominio visible) */
+  /* RENDERIZADO */
   function renderData() {
     updateTimeWindowLabel();
 
@@ -1732,7 +1630,6 @@
       document.getElementById("n2-elapsed").textContent = `Tiempo: ${elapsedHrs}h`;
     }
 
-    /* ---- Actualizar datasets ---- */
     tempChart.data.labels = labels;
     tempChart.data.datasets[0].data = s1Data;
     tempChart.data.datasets[1].data = s2Data;
@@ -1740,15 +1637,39 @@
     tempChart.data.datasets[3].data = pressureExpData;
     tempChart.data.datasets[4].data = pressureMeasData;
 
-    /* ---- Auto-escalado Y (solo si no hay zoom activo) ---- */
-    autoScaleYAxis(s1Data, s2Data, deltaData, pressureExpData, pressureMeasData);
+    // Auto-escalado del eje Y (solo si no hay zoom activo)
+    const isZoomed = typeof tempChart.isZoomedOrPanned === "function" && tempChart.isZoomedOrPanned();
+    if (!isZoomed) {
+      const tempVals = [...s1Data, ...s2Data, ...deltaData].filter(v => v !== null && Number.isFinite(v));
+      if (tempVals.length) {
+        const tMin = Math.min(...tempVals);
+        const tMax = Math.max(...tempVals);
+        const margin = Math.max(1, (tMax - tMin) * 0.15);
+        tempChart.options.scales.y.min = Math.floor(tMin - margin);
+        tempChart.options.scales.y.max = Math.ceil(tMax + margin);
+      } else {
+        tempChart.options.scales.y.min = undefined;
+        tempChart.options.scales.y.max = undefined;
+      }
+    }
 
-    /* ---- Render sin animación (evita flicker y preserva zoom) ---- */
+    // Auto-escalado del eje de presión (solo si está visible)
+    if (tempChart.options.scales.pressure.display) {
+      const pressVals = [...pressureExpData, ...pressureMeasData].filter(v => v !== null && Number.isFinite(v));
+      if (pressVals.length) {
+        const pMin = Math.min(...pressVals);
+        const pMax = Math.max(...pressVals);
+        const pMargin = Math.max(1, (pMax - pMin) * 0.15);
+        tempChart.options.scales.pressure.min = Math.floor(pMin - pMargin);
+        tempChart.options.scales.pressure.max = Math.ceil(pMax + pMargin);
+      }
+    }
+
     tempChart.update("none");
     refreshLegendState();
   }
 
-  /* INICIALIZACIÓN DE LA APLICACIÓN */
+  /* INICIALIZACIÓN */
   window.addEventListener("DOMContentLoaded", () => {
     loadSavedAlarms();
     loadPressureState();
@@ -1756,6 +1677,7 @@
     updateNextButtonState();
     updateConnectionBadge();
     buildChartLegend();
+    updateChartVisibility();
     fetchData();
     pollLatest();
     renderBatteryAndWifi();
@@ -1802,7 +1724,6 @@
   });
 </script>
 
-<!-- Registro del Service Worker (PWA) -->
 <script>
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
