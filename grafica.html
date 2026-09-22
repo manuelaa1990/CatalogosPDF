@@ -191,26 +191,47 @@
 
 <!-- BOTTOMBAR -->
 <div id="bottombar" class="ui-bar border-t">
-  <div class="flex items-center justify-between px-3 py-2 text-[11px]">
+  <div class="flex items-center justify-between px-3 py-2 text-[11px] gap-2 flex-wrap">
+
     <!-- Batería -->
-    <div class="flex items-center gap-1.5">
+    <div class="flex items-center gap-1.5 shrink-0">
       <svg id="bat-icon" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
       </svg>
       <span id="bat-val" class="font-mono text-slate-300">--% · --.--V</span>
     </div>
 
+    <!-- Selector de series (toggle pills) -->
+    <div class="flex items-center gap-1 shrink-0">
+      <button id="toggle-s1" onclick="toggleSeries(0)" title="Mostrar Sonda 1"
+        class="series-toggle active flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold transition active:scale-95 border">
+        <span class="w-2 h-2 rounded-full" style="background:#38bdf8"></span>
+        <span>S1</span>
+      </button>
+
+      <button id="toggle-s2" onclick="toggleSeries(1)" title="Mostrar Sonda 2"
+        class="series-toggle active flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold transition active:scale-95 border">
+        <span class="w-2 h-2 rounded-full" style="background:#f87171"></span>
+        <span>S2</span>
+      </button>
+
+      <button id="toggle-dt" onclick="toggleSeries(2)" title="Mostrar ΔT"
+        class="series-toggle active flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold transition active:scale-95 border">
+        <span class="w-2 h-2 rounded-full" style="background:#fbbf24"></span>
+        <span>ΔT</span>
+      </button>
+    </div>
+
     <!-- WiFi + IP -->
-    <div class="flex items-center gap-1 text-slate-300">
-      <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="flex items-center gap-1 text-slate-300 min-w-0">
+      <svg class="w-4 h-4 text-sky-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071a10 10 0 0114.142 0M1.42 9.428a16 16 0 0121.16 0"/>
       </svg>
-      <span id="wifi-val" class="truncate max-w-[160px]">--</span>
+      <span id="wifi-val" class="truncate max-w-[180px]">--</span>
     </div>
 
     <!-- Controles -->
-    <div class="flex items-center gap-1.5">
-      <!-- Reset zoom -->
+    <div class="flex items-center gap-1.5 shrink-0">
       <button onclick="resetZoom()" title="Reset zoom"
         class="p-1.5 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-200 border border-slate-700">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,7 +239,6 @@
         </svg>
       </button>
 
-      <!-- Fullscreen -->
       <button onclick="toggleFullscreen()" title="Pantalla completa"
         class="p-1.5 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-200 border border-slate-700">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,7 +246,6 @@
         </svg>
       </button>
 
-      <!-- ePaper -->
       <button onclick="toggleEPaper()" title="Alto contraste"
         class="p-1.5 rounded bg-slate-800/70 hover:bg-slate-700 text-slate-200 border border-slate-700">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -234,6 +253,7 @@
         </svg>
       </button>
     </div>
+
   </div>
 </div>
 
