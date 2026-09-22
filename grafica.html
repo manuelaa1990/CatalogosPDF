@@ -154,12 +154,13 @@
 <div id="topbar" class="ui-bar border-b">
   <div class="flex items-center gap-2 px-3 py-2">
     <!-- Volver -->
-    <button onclick="exitAndGoBack()" title="Volver"
-      class="p-2 rounded-lg bg-slate-800/70 hover:bg-slate-700 text-slate-200 border border-slate-700">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-      </svg>
-    </button>
+<button onclick="exitAndGoBack()" title="Salir de la gráfica"
+  class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold border border-rose-500 shadow-lg flex items-center gap-1.5 active:scale-95 transition">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+  </svg>
+  <span>Salir</span>
+</button>
 
     <!-- Título + estado -->
     <div class="flex-1 min-w-0">
@@ -736,6 +737,17 @@
       }
     });
   });
+/* ============================================================
+   BOTÓN FÍSICO "ATRÁS" DEL MÓVIL
+   ============================================================ */
+
+// Añadir una entrada al historial para interceptar el botón atrás
+history.pushState({ page: "grafica" }, "", location.href);
+
+window.addEventListener("popstate", (e) => {
+  // El usuario pulsó el botón atrás del móvil → volver a index
+  exitAndGoBack();
+});
 </script>
 
 </body>
