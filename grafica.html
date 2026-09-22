@@ -133,6 +133,35 @@
       background: #000;
       color: #fff;
     }
+
+    /* Pills del selector de series */
+    .series-toggle {
+      border-color: #334155;
+      background: #1e293b;
+      color: #94a3b8;
+      opacity: 0.45;
+    }
+    .series-toggle.active {
+      opacity: 1;
+      color: #e2e8f0;
+      background: #334155;
+      border-color: #475569;
+    }
+    body.epaper-mode .series-toggle {
+      background: #fff !important;
+      border-color: #000 !important;
+      color: #000 !important;
+      opacity: 0.4;
+    }
+    body.epaper-mode .series-toggle.active {
+      opacity: 1;
+      background: #000 !important;
+      color: #fff !important;
+      border-color: #000 !important;
+    }
+    body.epaper-mode .series-toggle.active span {
+      color: #fff !important;
+    }
   </style>
 </head>
 
@@ -154,13 +183,13 @@
 <div id="topbar" class="ui-bar border-b">
   <div class="flex items-center gap-2 px-3 py-2">
     <!-- Volver -->
-<button onclick="exitAndGoBack()" title="Salir de la gráfica"
-  class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold border border-rose-500 shadow-lg flex items-center gap-1.5 active:scale-95 transition">
-  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-  </svg>
-  <span>Salir</span>
-</button>
+    <button onclick="exitAndGoBack()" title="Salir de la gráfica"
+      class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold border border-rose-500 shadow-lg flex items-center gap-1.5 active:scale-95 transition">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      <span>Salir</span>
+    </button>
 
     <!-- Título + estado -->
     <div class="flex-1 min-w-0">
@@ -276,6 +305,12 @@
   let lastSeenAt = null;
   let latestAbsolute = null;
   let isEPaper = localStorage.getItem("epaper-mode") === "true";
+
+  // Estado de las series: [S1, S2, ΔT]
+  let seriesState = JSON.parse(localStorage.getItem("graph-series") || "[true,true,true]");
+  if (!Array.isArray(seriesState) || seriesState.length !== 3) {
+    seriesState = [true, true, true];
+  }
 
   /* ============================================================
      GRÁFICA
@@ -453,13 +488,6 @@
     };
   }
 
-  function isDataFresh(createdAt) {
-    if (!createdAt) return false;
-    const t = new Date(createdAt).getTime();
-    if (isNaN(t)) return false;
-    return (Date.now() - t) <= ESP_CONNECTED_MAX_AGE_MS;
-  }
-
   function formatAge(ms) {
     const s = Math.max(0, Math.round(ms / 1000));
     if (s < 60) return `${s} s`;
@@ -496,8 +524,13 @@
     tempChart.data.datasets[1].data = s2Data;
     tempChart.data.datasets[2].data = deltaData;
 
-    // Auto-escalado del eje Y
-    const allTemps = [...s1Data, ...s2Data].filter(v => v !== null && Number.isFinite(v));
+    // Auto-escalado del eje Y — solo con series VISIBLES
+    const visibleData = [];
+    if (seriesState[0]) visibleData.push(...s1Data);
+    if (seriesState[1]) visibleData.push(...s2Data);
+    if (seriesState[2]) visibleData.push(...deltaData);
+
+    const allTemps = visibleData.filter(v => v !== null && Number.isFinite(v));
     if (allTemps.length) {
       const tMin = Math.min(...allTemps);
       const tMax = Math.max(...allTemps);
@@ -611,6 +644,42 @@
   }
 
   /* ============================================================
+     SELECTOR DE SERIES
+     ============================================================ */
+
+  function applySeriesVisibility() {
+    seriesState.forEach((visible, i) => {
+      tempChart.setDatasetVisibility(i, visible);
+    });
+
+    // Actualizar apariencia de los botones
+    const ids = ["toggle-s1", "toggle-s2", "toggle-dt"];
+    ids.forEach((id, i) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.classList.toggle("active", seriesState[i]);
+    });
+
+    localStorage.setItem("graph-series", JSON.stringify(seriesState));
+
+    // Recalcular rango Y según series visibles
+    renderChart();
+  }
+
+  function toggleSeries(index) {
+    if (index < 0 || index > 2) return;
+
+    const newState = [...seriesState];
+    newState[index] = !newState[index];
+
+    // Evitar que todas queden ocultas a la vez
+    if (!newState.some(v => v)) return;
+
+    seriesState = newState;
+    if ("vibrate" in navigator) navigator.vibrate(15);
+    applySeriesVisibility();
+  }
+
+  /* ============================================================
      CONTROLES DE UI
      ============================================================ */
 
@@ -709,6 +778,16 @@
   document.querySelector("#portrait-hint button")?.addEventListener("click", enterFullscreen);
 
   /* ============================================================
+     BOTÓN FÍSICO "ATRÁS" DEL MÓVIL
+     ============================================================ */
+
+  history.pushState({ page: "grafica" }, "", location.href);
+
+  window.addEventListener("popstate", (e) => {
+    exitAndGoBack();
+  });
+
+  /* ============================================================
      INICIALIZACIÓN
      ============================================================ */
 
@@ -724,6 +803,9 @@
     });
 
     applyEPaper();
+
+    // Aplicar estado guardado de las series
+    applySeriesVisibility();
 
     // Detectar orientación
     if (window.matchMedia("(orientation: portrait)").matches && window.innerWidth < 1024) {
@@ -757,17 +839,6 @@
       }
     });
   });
-/* ============================================================
-   BOTÓN FÍSICO "ATRÁS" DEL MÓVIL
-   ============================================================ */
-
-// Añadir una entrada al historial para interceptar el botón atrás
-history.pushState({ page: "grafica" }, "", location.href);
-
-window.addEventListener("popstate", (e) => {
-  // El usuario pulsó el botón atrás del móvil → volver a index
-  exitAndGoBack();
-});
 </script>
 
 </body>
